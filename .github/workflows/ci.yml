@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: '0.12.19'
+          enable-cache: true
+          cache-dependency-glob: apps/ai/uv.lock
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ai:install
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: docker/setup-buildx-action@v4.4.1
+      - name: Configure disposable CI environment
+        run: |
+          cp .env.example .env
+          password=$(openssl rand -hex 24)
+          sed -i "s/replace_with_local_password/$password/g" .env
+      - name: Start PostgreSQL and Redis
+        run: docker compose up -d --wait
+      - name: Build web
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          file: infrastructure/docker/web.Dockerfile
+          tags: saas-web:ci
+          load: true
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Build API
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          file: infrastructure/docker/api.Dockerfile
+          tags: saas-api:ci
+          load: true
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: Build AI
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: .
+          file: infrastructure/docker/ai.Dockerfile
+          tags: saas-ai:ci
+          load: true
+          cache-from: type=gha,scope=ai
+          cache-to: type=gha,mode=max,scope=ai
+      - name: Smoke test containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .env
+          docker run -d --name web --network business-management-saas_default -p 127.0.0.1:3000:3000 saas-web:ci
+          docker run -d --name api --network business-management-saas_default -p 127.0.0.1:3001:3001 \
+            -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public" \
+            -e REDIS_URL=redis://redis:6379 saas-api:ci
+          docker run -d --name ai --network business-management-saas_default -p 127.0.0.1:8000:8000 saas-ai:ci
+          for url in http://127.0.0.1:3000/api/health http://127.0.0.1:3001/api/health/ready http://127.0.0.1:8000/health; do
+            curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 2 "$url"
+          done
+      - name: Clean up
+        if: always()
+        run: |
+          docker rm -f web api ai || true
+          docker compose down --volumes

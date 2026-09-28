@@ -1,0 +1,32 @@
+{
+  "name": "business-management-saas",
+  "private": true,
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0",
+    "pnpm": ">=10 <11"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write . && pnpm --filter @saas/ai format",
+    "format:check": "prettier --check . && pnpm --filter @saas/ai format:check",
+    "ai:install": "pnpm --filter @saas/ai install:python",
+    "db:generate": "pnpm --filter @saas/api db:generate",
+    "infra:up": "docker compose up -d --wait",
+    "infra:down": "docker compose down",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "9.1.7",
+    "lint-staged": "16.4.0",
+    "prettier": "3.9.9",
+    "turbo": "2.11.5"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,md,yml,yaml,css}": "prettier --write"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@saas/ai",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "install:python": "uv sync --locked",
+    "dev": "node ../../scripts/run-service.mjs ai dev",
+    "start": "node ../../scripts/run-service.mjs ai start",
+    "build": "uv build --no-sources",
+    "lint": "uv run --locked ruff check .",
+    "typecheck": "uv run --locked mypy app tests",
+    "test": "uv run --locked pytest",
+    "format": "uv run --locked ruff format .",
+    "format:check": "uv run --locked ruff format --check ."
+  }
+}

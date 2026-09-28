@@ -1,0 +1,30 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env", "scripts/**"],
+  "globalPassThroughEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "API_PORT",
+    "API_HOST",
+    "API_CORS_ORIGINS",
+    "WEB_PORT",
+    "WEB_HOST",
+    "AI_PORT",
+    "AI_HOST",
+    "AI_ENVIRONMENT",
+    "UV_PYTHON",
+    "CI"
+  ],
+  "tasks": {
+    "generate": { "cache": false },
+    "build": {
+      "dependsOn": ["^build", "generate"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": { "dependsOn": ["^build", "generate"], "cache": false, "persistent": true },
+    "lint": { "dependsOn": ["generate"], "outputs": [] },
+    "typecheck": { "dependsOn": ["^build", "generate"], "outputs": [] },
+    "test": { "dependsOn": ["^build", "generate"], "cache": false, "outputs": [] }
+  }
+}
