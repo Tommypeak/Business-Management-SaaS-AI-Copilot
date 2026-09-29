@@ -5,6 +5,10 @@ export interface Environment {
   API_PORT: number;
   API_HOST: string;
   API_CORS_ORIGINS: string[];
+  AUTH_ISSUER: string;
+  AUTH_JWKS_URL: string;
+  AUTH_AUDIENCE: string;
+  AUTH_AUTHORIZED_PARTIES: string[];
 }
 
 function requiredUrl(input: Record<string, unknown>, key: string, protocols: string[]): string {
@@ -45,6 +49,48 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
   const host = input.API_HOST ?? '127.0.0.1';
   if (typeof host !== 'string' || !host.trim()) throw new Error('API_HOST must be non-empty');
 
+  const authIssuer = input.AUTH_ISSUER ?? '';
+  const authJwks = input.AUTH_JWKS_URL ?? '';
+  if (typeof authIssuer !== 'string' || typeof authJwks !== 'string')
+    throw new Error('Invalid authentication URLs');
+  if (Boolean(authIssuer) !== Boolean(authJwks))
+    throw new Error('Set both AUTH_ISSUER and AUTH_JWKS_URL');
+  if (nodeEnv === 'production' && !authIssuer)
+    throw new Error('Authentication configuration is required in production');
+  for (const [key, value] of [
+    ['AUTH_ISSUER', authIssuer],
+    ['AUTH_JWKS_URL', authJwks],
+  ] as const) {
+    if (!value) continue;
+    requiredUrl({ [key]: value }, key, ['https:', 'http:']);
+    const url = new URL(value);
+    if (
+      url.username ||
+      url.password ||
+      url.hash ||
+      value.length > 512 ||
+      (url.protocol !== 'https:' &&
+        (nodeEnv === 'production' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
+    ) {
+      throw new Error(`${key} must use HTTPS (loopback HTTP is allowed outside production)`);
+    }
+  }
+  const audience = input.AUTH_AUDIENCE ?? '';
+  const rawParties = input.AUTH_AUTHORIZED_PARTIES ?? '';
+  if (typeof audience !== 'string' || typeof rawParties !== 'string')
+    throw new Error('Invalid authentication configuration');
+  const parties = rawParties
+    .split(',')
+    .map((party) => party.trim())
+    .filter(Boolean);
+  for (const party of parties) {
+    try {
+      if (new URL(party).origin !== party || !/^https?:\/\//.test(party)) throw new Error();
+    } catch {
+      throw new Error('AUTH_AUTHORIZED_PARTIES must contain explicit HTTP(S) origins');
+    }
+  }
+
   return {
     NODE_ENV: nodeEnv,
     DATABASE_URL: requiredUrl(input, 'DATABASE_URL', ['postgres:', 'postgresql:']),
@@ -52,5 +98,9 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
     API_PORT: port,
     API_HOST: host,
     API_CORS_ORIGINS: origins,
+    AUTH_ISSUER: authIssuer,
+    AUTH_JWKS_URL: authJwks,
+    AUTH_AUDIENCE: audience,
+    AUTH_AUTHORIZED_PARTIES: parties,
   };
 }

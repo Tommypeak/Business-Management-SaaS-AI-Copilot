@@ -7,13 +7,17 @@ import type { Environment } from '../config/environment.js';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor(config: ConfigService<Environment, true>) {
+    const connectionString = config.get('DATABASE_URL', { infer: true });
     super({
-      adapter: new PrismaPg({
-        connectionString: config.get('DATABASE_URL', { infer: true }),
-        connectionTimeoutMillis: 5000,
-        query_timeout: 5000,
-        max: 10,
-      }),
+      adapter: new PrismaPg(
+        {
+          connectionString,
+          connectionTimeoutMillis: 5000,
+          query_timeout: 5000,
+          max: 10,
+        },
+        { schema: new URL(connectionString).searchParams.get('schema') ?? 'public' },
+      ),
     });
   }
 

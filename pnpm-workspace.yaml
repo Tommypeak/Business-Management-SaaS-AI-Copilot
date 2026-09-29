@@ -2,6 +2,14 @@ packages:
   - apps/*
   - packages/*
 
+# Runtime workspace packages must be portable in pnpm deploy output.
+injectWorkspacePackages: true
+syncInjectedDepsAfterScripts:
+  - build
+
+ignoredBuiltDependencies:
+  - '@scarf/scarf'
+
 onlyBuiltDependencies:
   - '@nestjs/core'
   - '@prisma/engines'

@@ -9,3 +9,117 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum BusinessType {
+  RETAIL
+  SERVICES
+  WHOLESALE
+  FOOD_SERVICE
+  MIXED
+  OTHER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum LocationType {
+  STORE
+  WAREHOUSE
+  OFFICE
+  SERVICE_POINT
+  OTHER
+}
+
+model User {
+  id           String                   @id @default(uuid()) @db.Uuid
+  authProvider String                   @db.VarChar(512)
+  authSubject  String                   @db.VarChar(255)
+  createdAt    DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime                 @updatedAt @db.Timestamptz(3)
+  memberships  OrganizationMembership[]
+
+  @@unique([authProvider, authSubject])
+}
+
+model Organization {
+  id              String                   @id @default(uuid()) @db.Uuid
+  name            String                   @db.VarChar(120)
+  businessType    BusinessType
+  defaultCurrency String                   @db.Char(3)
+  timezone        String                   @db.VarChar(100)
+  locale          String                   @default("en") @db.VarChar(35)
+  createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                 @updatedAt @db.Timestamptz(3)
+  memberships     OrganizationMembership[]
+  roles           Role[]
+  locations       Location[]
+}
+
+model OrganizationMembership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  userId         String           @db.Uuid
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles          MembershipRole[]
+
+  @@unique([organizationId, userId])
+  @@unique([id, organizationId])
+  @@index([userId, status])
+}
+
+model Role {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  name           String           @db.VarChar(80)
+  key            String           @db.VarChar(80)
+  isSystem       Boolean          @default(false)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions    RolePermission[]
+  memberships    MembershipRole[]
+
+  @@unique([organizationId, key])
+  @@unique([id, organizationId])
+}
+
+model RolePermission {
+  organizationId String @db.Uuid
+  roleId         String @db.Uuid
+  permissionCode String @db.VarChar(80)
+  role           Role   @relation(fields: [roleId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@id([roleId, permissionCode])
+  @@index([organizationId])
+}
+
+model MembershipRole {
+  organizationId String                 @db.Uuid
+  membershipId   String                 @db.Uuid
+  roleId         String                 @db.Uuid
+  membership     OrganizationMembership @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  role           Role                   @relation(fields: [roleId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@id([membershipId, roleId])
+  @@index([roleId, organizationId])
+  @@index([organizationId])
+}
+
+model Location {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String       @db.VarChar(120)
+  type           LocationType
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt, id])
+}
