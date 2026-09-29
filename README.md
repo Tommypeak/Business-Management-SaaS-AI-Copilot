@@ -4,8 +4,11 @@
 
 Технический фундамент multi-tenant SaaS-платформы. Stage 2 добавляет managed
 authentication через Clerk, локальную identity, организации, memberships, RBAC
-и Locations. Каталоги, продажи, складской учёт и AI-интеграции ещё не реализованы.
+и Locations. Stage 3 добавляет универсальный каталог товаров и услуг: категории,
+варианты, цены, SKU/barcode, options и типизированные custom fields.
+Продажи, складские количества и AI-интеграции ещё не реализованы.
 Подробности безопасности, API и настройки identity: [Stage 2](docs/stage-2.md).
+Архитектура, ограничения и API каталога: [Stage 3](docs/stage-3.md).
 
 ## Architecture
 
@@ -25,9 +28,9 @@ NestJS. Python-сервис выделен отдельно для Python/ML eco
 
 ```text
 apps/
-  web/                   Next.js App Router, Clerk, onboarding/settings/locations
+  web/                   Next.js App Router, Clerk, organization area и catalog UI
   api/
-    prisma/              Stage 2 schema и версионированные SQL migrations
+    prisma/              Identity/tenancy/catalog schema и SQL migrations
     prisma.config.ts     Настройки Prisma CLI
     src/
       config/            Проверка переменных окружения
@@ -38,9 +41,10 @@ apps/
       authorization/     Membership и permission guards
       organizations/     Атомарное создание, настройки, список members/roles
       locations/         Tenant-scoped Locations
+      catalog/           Items, variants, categories, options, custom fields
       common/            DTO pagination и безопасный exception filter
       generated/         Сгенерированный Prisma Client, исключён из Git
-    test/                Smoke + JWT/RBAC/isolation integration tests
+    test/                Smoke + JWT/RBAC/isolation/catalog integration tests
   ai/
     app/api/             HTTP routes
     app/core/            Pydantic settings
@@ -185,6 +189,8 @@ Web проверяется production-сборкой. API smoke tests прове
 и CORS с подменой infrastructure providers; integration tests используют настоящий
 PostgreSQL, Redis и локальный JWKS с временным ключом. Они требуют
 `TEST_DATABASE_URL` и не пропускаются молча. Реальные Clerk credentials не нужны.
+Catalog scenarios проверяют ограничения БД, tenant isolation, точность цен,
+конкурентные изменения и permission backfill на организации, созданной до Stage 3.
 CI также проверяет контейнеры с PostgreSQL и Redis.
 Root-команды включают Python через небольшой package.json-адаптер для Turbo;
 Python-зависимостями управляет исключительно uv.
@@ -219,7 +225,7 @@ Prettier. Python туда не попадает; его Ruff/mypy/pytest про�
 | `GET /health` на AI            | `{"status":"ok","service":"ai"}`                                          |
 
 API readiness имеет таймаут 5 секунд и не возвращает детали подключения.
-Health routes публичны и нейтральны к версии; защищённые Stage 2 endpoints
+Health routes публичны и нейтральны к версии; защищённые endpoints
 доступны под `/api/v1/...`.
 
 ## Database and runtime configuration
@@ -229,6 +235,10 @@ Prisma расположен внутри API. Версия 7 используе�
 `20260929084943_identity_tenancy` создаёт User, Organization,
 OrganizationMembership, Role, RolePermission, MembershipRole и Location.
 Составные foreign keys защищают assignment ролей от смешивания tenants.
+Миграция `20260929182020_universal_catalog` добавляет девять таблиц каталога,
+составные tenant foreign keys, ограничения default variant и backfill permissions
+для существующих системных ролей. Каталог использует PostgreSQL Decimal(19,4),
+а HTTP-контракты передают цены строками.
 `prisma db push` не используется: изменения схемы оформляются migrations.
 
 `PrismaModule` экспортирует `PrismaService`; будущие модули смогут явно импортировать

@@ -24,6 +24,7 @@ import { PrismaService } from '../src/prisma/prisma.service.js';
 import { OrganizationsService } from '../src/organizations/organizations.service.js';
 import { configureApplication } from '../src/bootstrap.js';
 import { validateEnvironment } from '../src/config/environment.js';
+import { registerCatalogTests } from './catalog.scenarios.js';
 
 const envPath = resolve('../../.env');
 if (existsSync(envPath)) process.loadEnvFile(envPath);
@@ -44,6 +45,7 @@ let member: UserResponse;
 let orgA: OrganizationResponse;
 let orgB: OrganizationResponse;
 let locationB: LocationResponse;
+let legacyOrganizationId: string;
 const input = {
   name: 'Organization',
   businessType: 'RETAIL' as const,
@@ -91,6 +93,38 @@ before(async () => {
   // Identifier is generated above, never supplied by HTTP requests or environment.
   await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
   const require = createRequire(import.meta.url);
+  // Execute the actual Stage 2 SQL, seed an existing organization, then upgrade.
+  for (const args of [
+    ['db', 'execute', '--file', 'prisma/migrations/20260929084943_identity_tenancy/migration.sql'],
+    ['migrate', 'resolve', '--applied', '20260929084943_identity_tenancy'],
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      [require.resolve('prisma/build/index.js'), ...args],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        timeout: 60000,
+        env: { ...process.env, DATABASE_URL: url.toString() },
+      },
+    );
+    assert.equal(result.status, 0, `Stage 2 migration setup failed: ${args[0]}`);
+  }
+  const legacy = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: url.toString() }, { schema }),
+  });
+  try {
+    const organization = await legacy.organization.create({
+      data: { ...input, name: 'Pre-Stage-3 organization' },
+    });
+    legacyOrganizationId = organization.id;
+    for (const key of ['OWNER', 'ADMIN', 'MEMBER'])
+      await legacy.role.create({
+        data: { organizationId: organization.id, key, name: key, isSystem: true },
+      });
+  } finally {
+    await legacy.$disconnect();
+  }
   const migration = spawnSync(
     process.execPath,
     [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'],
@@ -537,3 +571,5 @@ void test('production configuration rejects missing auth and HTTP JWKS', () => {
     '',
   );
 });
+
+registerCatalogTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));

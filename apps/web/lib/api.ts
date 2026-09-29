@@ -19,7 +19,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = await auth();
   if (!session.userId) redirect('/sign-in');
   const token = await session.getToken();
@@ -44,6 +44,22 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(401, 'Your session could not be verified. Sign out and sign in again.');
   }
   if (!response.ok) {
+    const knownConflicts: Record<string, string> = {
+      SKU_ALREADY_EXISTS: 'This SKU is already used in this organization.',
+      BARCODE_ALREADY_EXISTS: 'This barcode is already used in this organization.',
+      CATALOG_VALUE_ALREADY_EXISTS: 'This key, name or option value already exists.',
+    };
+    if (response.status === 409) {
+      const body: unknown = await response.json().catch(() => null);
+      if (
+        body &&
+        typeof body === 'object' &&
+        'code' in body &&
+        typeof body.code === 'string' &&
+        knownConflicts[body.code]
+      )
+        throw new ApiError(409, knownConflicts[body.code]!);
+    }
     const messages: Record<number, string> = {
       400: 'Check the fields and try again.',
       403: 'You do not have permission to perform this action.',
@@ -58,7 +74,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function list<T>(path: string): Promise<T[]> {
+export async function list<T>(path: string): Promise<T[]> {
   const items: T[] = [];
   let cursor: string | null = null;
   do {

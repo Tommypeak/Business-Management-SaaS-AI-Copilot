@@ -26,6 +26,8 @@ export const Permission = {
   ROLES_MANAGE: 'roles.manage',
   LOCATIONS_VIEW: 'locations.view',
   LOCATIONS_MANAGE: 'locations.manage',
+  CATALOG_VIEW: 'catalog.view',
+  CATALOG_MANAGE: 'catalog.manage',
 } as const;
 export type PermissionCode = (typeof Permission)[keyof typeof Permission];
 
@@ -80,3 +82,5 @@ export interface PageResponse<T> {
   items: T[];
   nextCursor: string | null;
 }
+
+export * from './catalog.js';
