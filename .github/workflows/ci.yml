@@ -88,7 +88,10 @@ jobs:
             -e REDIS_URL=redis://redis:6379 saas-api:ci
           docker run -d --name ai --network business-management-saas_default -p 127.0.0.1:8000:8000 saas-ai:ci
           for url in http://127.0.0.1:3000/api/health http://127.0.0.1:3001/api/health/ready http://127.0.0.1:8000/health; do
-            curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 2 "$url"
+            # Published ports can reset connections before the HTTP server is ready.
+            # These GET probes are safe to retry, but persistent failures must fail CI.
+            curl --fail --silent --show-error --max-time 10 \
+              --retry 20 --retry-all-errors --retry-delay 2 --retry-max-time 120 "$url"
           done
       - name: Clean up
         if: always()
