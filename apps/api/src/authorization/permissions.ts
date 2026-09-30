@@ -18,6 +18,11 @@ export const SYSTEM_ROLES = [
   {
     key: 'MEMBER',
     name: 'Member',
-    permissions: [Permission.ORGANIZATION_VIEW, Permission.LOCATIONS_VIEW, Permission.CATALOG_VIEW],
+    permissions: [
+      Permission.ORGANIZATION_VIEW,
+      Permission.LOCATIONS_VIEW,
+      Permission.CATALOG_VIEW,
+      Permission.INVENTORY_VIEW,
+    ],
   },
 ] as const;

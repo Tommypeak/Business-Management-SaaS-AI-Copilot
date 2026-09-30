@@ -33,31 +33,34 @@ enum LocationType {
 }
 
 model User {
-  id           String                   @id @default(uuid()) @db.Uuid
-  authProvider String                   @db.VarChar(512)
-  authSubject  String                   @db.VarChar(255)
-  createdAt    DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt    DateTime                 @updatedAt @db.Timestamptz(3)
-  memberships  OrganizationMembership[]
+  id                    String                   @id @default(uuid()) @db.Uuid
+  authProvider          String                   @db.VarChar(512)
+  authSubject           String                   @db.VarChar(255)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
+  memberships           OrganizationMembership[]
+  inventoryTransactions InventoryTransaction[]
 
   @@unique([authProvider, authSubject])
 }
 
 model Organization {
-  id                String                   @id @default(uuid()) @db.Uuid
-  name              String                   @db.VarChar(120)
-  businessType      BusinessType
-  defaultCurrency   String                   @db.Char(3)
-  timezone          String                   @db.VarChar(100)
-  locale            String                   @default("en") @db.VarChar(35)
-  createdAt         DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime                 @updatedAt @db.Timestamptz(3)
-  memberships       OrganizationMembership[]
-  roles             Role[]
-  locations         Location[]
-  catalogItems      CatalogItem[]
-  catalogCategories CatalogCategory[]
-  customFields      CustomFieldDefinition[]
+  id                    String                   @id @default(uuid()) @db.Uuid
+  name                  String                   @db.VarChar(120)
+  businessType          BusinessType
+  defaultCurrency       String                   @db.Char(3)
+  timezone              String                   @db.VarChar(100)
+  locale                String                   @default("en") @db.VarChar(35)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
+  memberships           OrganizationMembership[]
+  roles                 Role[]
+  locations             Location[]
+  catalogItems          CatalogItem[]
+  catalogCategories     CatalogCategory[]
+  customFields          CustomFieldDefinition[]
+  inventorySettings     InventorySettings?
+  inventoryTransactions InventoryTransaction[]
 }
 
 model OrganizationMembership {
@@ -115,15 +118,18 @@ model MembershipRole {
 }
 
 model Location {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  name           String       @db.VarChar(120)
-  type           LocationType
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                String                 @id @default(uuid()) @db.Uuid
+  organizationId    String                 @db.Uuid
+  name              String                 @db.VarChar(120)
+  type              LocationType
+  isActive          Boolean                @default(true)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inventoryBalances InventoryBalance[]
+  inventoryEntries  InventoryLedgerEntry[]
 
+  @@unique([id, organizationId])
   @@index([organizationId, createdAt, id])
 }
 
@@ -199,22 +205,25 @@ model CatalogItem {
 }
 
 model CatalogVariant {
-  id             String               @id @default(uuid()) @db.Uuid
-  organizationId String               @db.Uuid
-  catalogItemId  String               @db.Uuid
-  name           String?              @db.VarChar(120)
-  sku            String?              @db.VarChar(80)
-  barcode        String?              @db.VarChar(120)
-  sellingPrice   Decimal              @db.Decimal(19, 4)
-  costPrice      Decimal?             @db.Decimal(19, 4)
-  unit           UnitOfMeasure
-  isDefault      Boolean              @default(false)
-  isActive       Boolean              @default(true)
-  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
-  item           CatalogItem          @relation(fields: [catalogItemId, organizationId], references: [id, organizationId], onDelete: Cascade)
-  optionValues   VariantOptionValue[]
+  id                String                 @id @default(uuid()) @db.Uuid
+  organizationId    String                 @db.Uuid
+  catalogItemId     String                 @db.Uuid
+  name              String?                @db.VarChar(120)
+  sku               String?                @db.VarChar(80)
+  barcode           String?                @db.VarChar(120)
+  sellingPrice      Decimal                @db.Decimal(19, 4)
+  costPrice         Decimal?               @db.Decimal(19, 4)
+  unit              UnitOfMeasure
+  isDefault         Boolean                @default(false)
+  isActive          Boolean                @default(true)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+  item              CatalogItem            @relation(fields: [catalogItemId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  optionValues      VariantOptionValue[]
+  inventoryBalances InventoryBalance[]
+  inventoryEntries  InventoryLedgerEntry[]
 
+  @@unique([id, organizationId])
   @@unique([id, catalogItemId, organizationId])
   @@unique([organizationId, sku])
   @@unique([organizationId, barcode])
@@ -309,4 +318,80 @@ model CatalogItemCustomFieldValue {
 
   @@id([catalogItemId, fieldDefinitionId])
   @@index([organizationId, fieldDefinitionId])
+}
+
+enum InventoryTransactionType {
+  OPENING_BALANCE
+  ADJUSTMENT
+  TRANSFER
+  REVERSAL
+}
+
+enum InventoryAdjustmentReason {
+  COUNT_CORRECTION
+  DAMAGE
+  LOSS
+  FOUND
+  OTHER
+}
+
+model InventorySettings {
+  organizationId     String       @id @db.Uuid
+  allowNegativeStock Boolean      @default(false)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model InventoryTransaction {
+  id                    String                     @id @default(uuid()) @db.Uuid
+  organizationId        String                     @db.Uuid
+  type                  InventoryTransactionType
+  createdByUserId       String                     @db.Uuid
+  idempotencyKey        String                     @db.Uuid
+  requestHash           String                     @db.Char(64)
+  note                  String?                    @db.VarChar(2000)
+  reason                InventoryAdjustmentReason?
+  reversesTransactionId String?                    @unique @db.Uuid
+  createdAt             DateTime                   @default(now()) @db.Timestamptz(3)
+  organization          Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy             User                       @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  reverses              InventoryTransaction?      @relation("InventoryReversals", fields: [reversesTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: NoAction)
+  reversals             InventoryTransaction[]     @relation("InventoryReversals")
+  entries               InventoryLedgerEntry[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt, id])
+}
+
+model InventoryLedgerEntry {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  transactionId  String               @db.Uuid
+  locationId     String               @db.Uuid
+  variantId      String               @db.Uuid
+  quantityDelta  Decimal              @db.Decimal(19, 6)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  transaction    InventoryTransaction @relation(fields: [transactionId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  location       Location             @relation(fields: [locationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant        CatalogVariant       @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([transactionId, locationId, variantId])
+  @@index([organizationId, locationId, variantId, createdAt])
+  @@index([organizationId, variantId, createdAt])
+}
+
+model InventoryBalance {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  locationId     String         @db.Uuid
+  variantId      String         @db.Uuid
+  quantity       Decimal        @db.Decimal(19, 6)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  location       Location       @relation(fields: [locationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant        CatalogVariant @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([organizationId, locationId, variantId])
+  @@index([organizationId, variantId])
 }

@@ -11,6 +11,7 @@ import {
   type VariantOptionValue,
 } from '../generated/prisma/client.js';
 import type { ListQueryDto } from '../common/list-query.dto.js';
+import { protectVariant } from '../inventory/inventory-locks.js';
 import {
   CatalogDatabase,
   requireItem,
@@ -154,6 +155,13 @@ export class VariantsService {
         where: { organizationId, catalogItemId, id },
       });
       if (!variant) throw new NotFoundException();
+      await protectVariant(
+        tx,
+        organizationId,
+        id,
+        input.isActive === false,
+        input.unit !== undefined && input.unit !== variant.unit,
+      );
       if (variant.isDefault && input.isActive === false)
         throw new BadRequestException(
           'Default variant must remain active; archive the item instead',

@@ -78,7 +78,10 @@ export function registerCatalogTests(context: () => Context) {
         include: { permissions: true },
       });
       assert.deepEqual(
-        role.permissions.map((permission) => permission.permissionCode).sort(),
+        role.permissions
+          .map((permission) => permission.permissionCode)
+          .filter((code) => code.startsWith('catalog.'))
+          .sort(),
         key === 'MEMBER' ? ['catalog.view'] : ['catalog.manage', 'catalog.view'],
       );
     }

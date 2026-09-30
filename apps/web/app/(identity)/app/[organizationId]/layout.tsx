@@ -36,6 +36,9 @@ export default async function OrganizationLayout({
         {permissions.includes(Permission.CATALOG_VIEW) && (
           <Link href={`/app/${organizationId}/catalog`}>Catalog</Link>
         )}
+        {permissions.includes(Permission.INVENTORY_VIEW) && (
+          <Link href={`/app/${organizationId}/inventory`}>Inventory</Link>
+        )}
         {permissions.includes(Permission.ORGANIZATION_UPDATE) && (
           <Link href={`/app/${organizationId}/settings`}>Settings</Link>
         )}

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { isUUID } from 'class-validator';
+import { protectItem } from '../inventory/inventory-locks.js';
 import type {
   CatalogItemResponse,
   CatalogItemSummary,
@@ -81,6 +82,13 @@ export class CatalogService {
   ): Promise<CatalogItemResponse> {
     await this.db.write(organizationId, async (tx) => {
       const item = await requireItem(tx, organizationId, id);
+      await protectItem(
+        tx,
+        organizationId,
+        id,
+        input.trackInventory === false || input.isActive === false,
+        input.type === 'SERVICE' && item.type !== 'SERVICE',
+      );
       if ((input.type ?? item.type) === 'SERVICE' && (input.trackInventory ?? item.trackInventory))
         throw new BadRequestException('Services cannot track inventory');
       if (input.categoryId !== undefined && input.categoryId !== item.categoryId)

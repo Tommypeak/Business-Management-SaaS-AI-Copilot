@@ -4,6 +4,7 @@ import type { Location } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { ListQueryDto } from '../common/list-query.dto.js';
 import type { CreateLocationDto, UpdateLocationDto } from './location.dto.js';
+import { inventoryConflict, inventoryLock, resourceKey } from '../inventory/inventory-locks.js';
 
 function serialize(row: Location): LocationResponse {
   return {
@@ -46,11 +47,29 @@ export class LocationsService {
     locationId: string,
     input: UpdateLocationDto,
   ): Promise<LocationResponse> {
-    const rows = await this.prisma.location.updateManyAndReturn({
-      where: { id: locationId, organizationId },
-      data: { name: input.name, type: input.type, isActive: input.isActive },
+    return this.prisma.$transaction(async (tx) => {
+      await inventoryLock(tx, resourceKey(organizationId, 'location', locationId));
+      if (
+        !(await tx.location.findFirst({
+          where: { id: locationId, organizationId },
+          select: { id: true },
+        }))
+      )
+        throw new NotFoundException();
+      if (
+        input.isActive === false &&
+        (await tx.inventoryBalance.findFirst({
+          where: { organizationId, locationId, quantity: { not: 0 } },
+          select: { id: true },
+        }))
+      )
+        inventoryConflict('INVENTORY_STOCK_EXISTS');
+      return serialize(
+        await tx.location.update({
+          where: { id: locationId, organizationId },
+          data: { name: input.name, type: input.type, isActive: input.isActive },
+        }),
+      );
     });
-    if (!rows[0]) throw new NotFoundException();
-    return serialize(rows[0]);
   }
 }

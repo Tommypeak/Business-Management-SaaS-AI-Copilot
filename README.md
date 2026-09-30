@@ -6,9 +6,12 @@
 authentication через Clerk, локальную identity, организации, memberships, RBAC
 и Locations. Stage 3 добавляет универсальный каталог товаров и услуг: категории,
 варианты, цены, SKU/barcode, options и типизированные custom fields.
-Продажи, складские количества и AI-интеграции ещё не реализованы.
+Stage 4 добавляет inventory ledger, остатки по Locations, opening balances,
+корректировки, перемещения, reversals и negative-stock policy.
+Продажи, закупки, оценка стоимости запасов и AI-интеграции ещё не реализованы.
 Подробности безопасности, API и настройки identity: [Stage 2](docs/stage-2.md).
 Архитектура, ограничения и API каталога: [Stage 3](docs/stage-3.md).
+Складской учёт, блокировки, idempotency и API: [Stage 4](docs/stage-4.md).
 
 ## Architecture
 
@@ -42,9 +45,10 @@ apps/
       organizations/     Атомарное создание, настройки, список members/roles
       locations/         Tenant-scoped Locations
       catalog/           Items, variants, categories, options, custom fields
+      inventory/         Commands, ledger history, stock projection, settings
       common/            DTO pagination и безопасный exception filter
       generated/         Сгенерированный Prisma Client, исключён из Git
-    test/                Smoke + JWT/RBAC/isolation/catalog integration tests
+    test/                Smoke + JWT/RBAC/catalog/inventory/concurrency tests
   ai/
     app/api/             HTTP routes
     app/core/            Pydantic settings
@@ -191,6 +195,8 @@ PostgreSQL, Redis и локальный JWKS с временным ключом.
 `TEST_DATABASE_URL` и не пропускаются молча. Реальные Clerk credentials не нужны.
 Catalog scenarios проверяют ограничения БД, tenant isolation, точность цен,
 конкурентные изменения и permission backfill на организации, созданной до Stage 3.
+Inventory scenarios проверяют projection = SUM(ledger), Decimal quantities,
+конкурентные команды, idempotency, reversals и гонки с изменениями Catalog/Locations.
 CI также проверяет контейнеры с PostgreSQL и Redis.
 Root-команды включают Python через небольшой package.json-адаптер для Turbo;
 Python-зависимостями управляет исключительно uv.
@@ -239,6 +245,11 @@ OrganizationMembership, Role, RolePermission, MembershipRole и Location.
 составные tenant foreign keys, ограничения default variant и backfill permissions
 для существующих системных ролей. Каталог использует PostgreSQL Decimal(19,4),
 а HTTP-контракты передают цены строками.
+Миграция `20260930140000_inventory_ledger` добавляет InventorySettings,
+InventoryTransaction, InventoryLedgerEntry и InventoryBalance с quantity Decimal(19,6).
+Backfill создаёт настройки и добавляет inventory permissions существующим tenants.
+История защищена PostgreSQL triggers от UPDATE/DELETE/TRUNCATE; исправления оформляются
+compensating transaction. Catalog models не содержат складских quantity-полей.
 `prisma db push` не используется: изменения схемы оформляются migrations.
 
 `PrismaModule` экспортирует `PrismaService`; будущие модули смогут явно импортировать

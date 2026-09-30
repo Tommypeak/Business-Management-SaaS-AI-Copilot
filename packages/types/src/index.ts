@@ -28,8 +28,13 @@ export const Permission = {
   LOCATIONS_MANAGE: 'locations.manage',
   CATALOG_VIEW: 'catalog.view',
   CATALOG_MANAGE: 'catalog.manage',
+  INVENTORY_VIEW: 'inventory.view',
+  INVENTORY_ADJUST: 'inventory.adjust',
+  INVENTORY_TRANSFER: 'inventory.transfer',
+  INVENTORY_SETTINGS_MANAGE: 'inventory.settings.manage',
 } as const;
 export type PermissionCode = (typeof Permission)[keyof typeof Permission];
+export * from './inventory.js';
 
 export interface UserResponse {
   id: string;

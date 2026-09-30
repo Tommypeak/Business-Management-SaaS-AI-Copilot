@@ -39,6 +39,7 @@ export class OrganizationsService {
           defaultCurrency: input.defaultCurrency,
           timezone: input.timezone,
           locale: input.locale ?? 'en',
+          inventorySettings: { create: {} },
         },
       });
       const membership = await tx.organizationMembership.create({

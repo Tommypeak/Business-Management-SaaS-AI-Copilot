@@ -48,6 +48,20 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       SKU_ALREADY_EXISTS: 'This SKU is already used in this organization.',
       BARCODE_ALREADY_EXISTS: 'This barcode is already used in this organization.',
       CATALOG_VALUE_ALREADY_EXISTS: 'This key, name or option value already exists.',
+      INSUFFICIENT_STOCK: 'There is not enough stock at this location.',
+      OPENING_BALANCE_ALREADY_INITIALIZED:
+        'This variant already has inventory history here. Use an adjustment instead.',
+      INVENTORY_STOCK_EXISTS: 'Bring stock to zero at every location before making this change.',
+      INVENTORY_UNIT_IMMUTABLE: 'The unit cannot change after inventory movements.',
+      INVENTORY_ITEM_TYPE_IMMUTABLE: 'An item with inventory history cannot become a service.',
+      INVENTORY_TRANSACTION_ALREADY_REVERSED: 'This transaction has already been reversed.',
+      INVENTORY_REVERSAL_NOT_ALLOWED: 'A reversal cannot itself be reversed.',
+      IDEMPOTENCY_KEY_CONFLICT:
+        'This request key was used for a different operation. Refresh the form before starting a new operation.',
+      INVENTORY_TRACKING_DISABLED: 'Choose a product with inventory tracking enabled.',
+      INVENTORY_RESOURCE_INACTIVE: 'The item, variant and locations must all be active.',
+      INVENTORY_QUANTITY_OVERFLOW: 'The resulting stock exceeds the supported quantity range.',
+      INVENTORY_NEGATIVE_STOCK_EXISTS: 'Resolve negative balances before disabling negative stock.',
     };
     if (response.status === 409) {
       const body: unknown = await response.json().catch(() => null);
