@@ -8,10 +8,13 @@ authentication через Clerk, локальную identity, организац
 варианты, цены, SKU/barcode, options и типизированные custom fields.
 Stage 4 добавляет inventory ledger, остатки по Locations, opening balances,
 корректировки, перемещения, reversals и negative-stock policy.
-Продажи, закупки, оценка стоимости запасов и AI-интеграции ещё не реализованы.
+Stage 5 добавляет Customers, draft Sales Orders, completion с атомарным списанием
+Inventory, snapshot цен/названий и частичные/полные ручные Payments.
+Закупки, возвраты, налоги, оценка стоимости запасов и AI-интеграции ещё не реализованы.
 Подробности безопасности, API и настройки identity: [Stage 2](docs/stage-2.md).
 Архитектура, ограничения и API каталога: [Stage 3](docs/stage-3.md).
 Складской учёт, блокировки, idempotency и API: [Stage 4](docs/stage-4.md).
+Продажи, клиенты, оплаты, транзакции и ограничения: [Stage 5](docs/stage-5.md).
 
 ## Architecture
 
@@ -31,9 +34,9 @@ NestJS. Python-сервис выделен отдельно для Python/ML eco
 
 ```text
 apps/
-  web/                   Next.js App Router, Clerk, organization area и catalog UI
+  web/                   Next.js, Clerk, organization/catalog/inventory/sales UI
   api/
-    prisma/              Identity/tenancy/catalog schema и SQL migrations
+    prisma/              Identity/tenancy/catalog/inventory/sales schema и migrations
     prisma.config.ts     Настройки Prisma CLI
     src/
       config/            Проверка переменных окружения
@@ -46,9 +49,10 @@ apps/
       locations/         Tenant-scoped Locations
       catalog/           Items, variants, categories, options, custom fields
       inventory/         Commands, ledger history, stock projection, settings
+      sales/             Customers, orders, totals, payments, Inventory integration
       common/            DTO pagination и безопасный exception filter
       generated/         Сгенерированный Prisma Client, исключён из Git
-    test/                Smoke + JWT/RBAC/catalog/inventory/concurrency tests
+    test/                Smoke + JWT/RBAC/catalog/inventory/sales/concurrency tests
   ai/
     app/api/             HTTP routes
     app/core/            Pydantic settings

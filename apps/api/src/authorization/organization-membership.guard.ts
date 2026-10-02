@@ -29,7 +29,7 @@ export class OrganizationMembershipGuard implements CanActivate {
     });
     if (!membership) throw new NotFoundException();
     request.organizationContext = {
-      organizationId,
+      organizationId: membership.organizationId,
       membershipId: membership.id,
       roles: membership.roles.map(({ role }) => ({ id: role.id, key: role.key, name: role.name })),
       permissions: [

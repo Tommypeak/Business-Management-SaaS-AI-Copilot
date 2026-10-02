@@ -26,6 +26,7 @@ import { configureApplication } from '../src/bootstrap.js';
 import { validateEnvironment } from '../src/config/environment.js';
 import { registerCatalogTests } from './catalog.scenarios.js';
 import { registerInventoryTests } from './inventory.scenarios.js';
+import { registerSalesTests } from './sales.scenarios.js';
 
 const envPath = resolve('../../.env');
 if (existsSync(envPath)) process.loadEnvFile(envPath);
@@ -575,3 +576,4 @@ void test('production configuration rejects missing auth and HTTP JWKS', () => {
 
 registerCatalogTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
 registerInventoryTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
+registerSalesTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));

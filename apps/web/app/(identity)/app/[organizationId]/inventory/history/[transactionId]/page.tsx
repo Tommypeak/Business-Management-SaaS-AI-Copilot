@@ -17,6 +17,7 @@ export default async function TransactionPage({
     row.type === 'TRANSFER' ? Permission.INVENTORY_TRANSFER : Permission.INVENTORY_ADJUST;
   const reverse =
     row.type !== 'REVERSAL' &&
+    row.type !== 'SALE' &&
     !row.reversedByTransactionId &&
     organization.currentMembership.permissions.includes(permission);
   const base = `/app/${org}/inventory/history`;
@@ -29,6 +30,15 @@ export default async function TransactionPage({
       <section className="panel space-y-3">
         <p>{row.createdAt.replace('T', ' ').replace('Z', ' UTC')}</p>
         <p className="break-all">Created by: {row.createdBy.id}</p>
+        {row.salesOrderId &&
+          organization.currentMembership.permissions.includes(Permission.SALES_VIEW) && (
+            <p>
+              Source sale:{' '}
+              <Link className="underline" href={`/app/${org}/sales/${row.salesOrderId}`}>
+                {row.salesOrderId}
+              </Link>
+            </p>
+          )}
         {row.reason && <p>Reason: {row.reason}</p>}
         <p className="whitespace-pre-wrap break-words">{row.note ?? 'No note'}</p>
         {row.reversesTransactionId && (

@@ -1,6 +1,12 @@
 import type { UnitOfMeasure } from './catalog.js';
 
-export const INVENTORY_TYPES = ['OPENING_BALANCE', 'ADJUSTMENT', 'TRANSFER', 'REVERSAL'] as const;
+export const INVENTORY_TYPES = [
+  'OPENING_BALANCE',
+  'ADJUSTMENT',
+  'TRANSFER',
+  'REVERSAL',
+  'SALE',
+] as const;
 export type InventoryTransactionType = (typeof INVENTORY_TYPES)[number];
 export const ADJUSTMENT_DIRECTIONS = ['INCREASE', 'DECREASE'] as const;
 export type AdjustmentDirection = (typeof ADJUSTMENT_DIRECTIONS)[number];
@@ -37,6 +43,7 @@ export interface InventoryLedgerEntryResponse {
   unit: UnitOfMeasure;
 }
 export interface InventoryTransactionResponse {
+  salesOrderId: string | null;
   id: string;
   type: InventoryTransactionType;
   reason: AdjustmentReason | null;

@@ -45,6 +45,12 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (!response.ok) {
     const knownConflicts: Record<string, string> = {
+      ORDER_NOT_DRAFT: 'Only draft sales can be edited, completed or cancelled. Refresh the order.',
+      ORDER_NOT_COMPLETED: 'Complete the sale before recording a payment.',
+      ORDER_UNIT_CHANGED: 'A catalog unit changed. Save the draft items again before completion.',
+      CUSTOMER_INACTIVE: 'Choose an active customer.',
+      PAYMENT_EXCEEDS_OUTSTANDING: 'Payment exceeds the outstanding amount. Refresh the order.',
+      PAYMENT_LIMIT_REACHED: 'This order has reached the limit of 1,000 payment records.',
       SKU_ALREADY_EXISTS: 'This SKU is already used in this organization.',
       BARCODE_ALREADY_EXISTS: 'This barcode is already used in this organization.',
       CATALOG_VALUE_ALREADY_EXISTS: 'This key, name or option value already exists.',
@@ -55,7 +61,7 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       INVENTORY_UNIT_IMMUTABLE: 'The unit cannot change after inventory movements.',
       INVENTORY_ITEM_TYPE_IMMUTABLE: 'An item with inventory history cannot become a service.',
       INVENTORY_TRANSACTION_ALREADY_REVERSED: 'This transaction has already been reversed.',
-      INVENTORY_REVERSAL_NOT_ALLOWED: 'A reversal cannot itself be reversed.',
+      INVENTORY_REVERSAL_NOT_ALLOWED: 'Sales and reversal transactions cannot be reversed here.',
       IDEMPOTENCY_KEY_CONFLICT:
         'This request key was used for a different operation. Refresh the form before starting a new operation.',
       INVENTORY_TRACKING_DISABLED: 'Choose a product with inventory tracking enabled.',

@@ -8,7 +8,7 @@ import type { HistoryQueryDto } from './inventory.dto.js';
 const include = {
   entries: {
     orderBy: { id: 'asc' as const },
-    take: 2,
+    take: 100,
     include: { location: true, variant: { include: { item: true } } },
   },
   reversals: { select: { id: true }, take: 1 },
@@ -26,6 +26,7 @@ function serialize(row: Row): InventoryTransactionResponse {
   return {
     id: row.id,
     type: row.type,
+    salesOrderId: row.salesOrderId,
     reason: row.reason,
     createdAt: row.createdAt.toISOString(),
     createdBy: { id: row.createdByUserId },

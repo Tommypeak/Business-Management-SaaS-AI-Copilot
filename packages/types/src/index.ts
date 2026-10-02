@@ -18,6 +18,13 @@ export type LocationType = (typeof LOCATION_TYPES)[number];
 
 /** Public permission names only. Authorization is always evaluated by the API. */
 export const Permission = {
+  SALES_VIEW: 'sales.view',
+  SALES_CREATE: 'sales.create',
+  SALES_MANAGE: 'sales.manage',
+  SALES_COMPLETE: 'sales.complete',
+  SALES_PAYMENTS_MANAGE: 'sales.payments.manage',
+  CUSTOMERS_VIEW: 'customers.view',
+  CUSTOMERS_MANAGE: 'customers.manage',
   ORGANIZATION_VIEW: 'organization.view',
   ORGANIZATION_UPDATE: 'organization.update',
   MEMBERS_VIEW: 'members.view',
@@ -89,3 +96,4 @@ export interface PageResponse<T> {
 }
 
 export * from './catalog.js';
+export * from './sales.js';

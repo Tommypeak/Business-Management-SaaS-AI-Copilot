@@ -1,3 +1,4 @@
+import { IdempotencyKey, idempotencyHeader } from '../common/idempotency-key.decorator.js';
 import {
   Body,
   Controller,
@@ -8,11 +9,9 @@ import {
   Post,
   Query,
   UseGuards,
-  createParamDecorator,
-  type ExecutionContext,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiParam, ApiTags } from '@nestjs/swagger';
-import type { AuthenticatedRequest, LocalUser, OrganizationContext } from '../auth/auth-context.js';
+import type { LocalUser, OrganizationContext } from '../auth/auth-context.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { CurrentOrganization } from '../authorization/current-organization.decorator.js';
 import { OrganizationMembershipGuard } from '../authorization/organization-membership.guard.js';
@@ -31,21 +30,6 @@ import { InventoryCommandsService } from './commands.service.js';
 import { InventoryStockService } from './stock.service.js';
 import { InventoryTransactionsService } from './transactions.service.js';
 import { InventorySettingsService } from './settings.service.js';
-
-// ParseUUIDPipe validates a single header value; normalize casing before hashing/locking.
-const IdempotencyKey = createParamDecorator(
-  (_data: unknown, context: ExecutionContext): unknown => {
-    const value = context.switchToHttp().getRequest<AuthenticatedRequest>().headers[
-      'idempotency-key'
-    ];
-    return typeof value === 'string' ? value.toLowerCase() : value;
-  },
-);
-const idempotencyHeader = {
-  name: 'Idempotency-Key',
-  required: true,
-  schema: { type: 'string', format: 'uuid' },
-};
 
 @ApiTags('Inventory')
 @ApiBearerAuth()

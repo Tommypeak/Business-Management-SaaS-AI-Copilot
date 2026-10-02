@@ -1,11 +1,12 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../generated/prisma/client.js';
+import { Prisma, PrismaClient } from '../generated/prisma/client.js';
 import type { Environment } from '../config/environment.js';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  readonly sqlSchema: Prisma.Sql;
   constructor(config: ConfigService<Environment, true>) {
     const connectionString = config.get('DATABASE_URL', { infer: true });
     super({
@@ -19,6 +20,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         { schema: new URL(connectionString).searchParams.get('schema') ?? 'public' },
       ),
     });
+    // SQL identifier from trusted server configuration, quoted independently of HTTP values.
+    const schema = new URL(connectionString).searchParams.get('schema') ?? 'public';
+    this.sqlSchema = Prisma.raw(`"${schema.replaceAll('"', '""')}"`);
   }
 
   async onModuleInit(): Promise<void> {

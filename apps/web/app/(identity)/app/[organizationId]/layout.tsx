@@ -33,6 +33,12 @@ export default async function OrganizationLayout({
       </nav>
       <nav aria-label="Organization pages" className="flex gap-4">
         <Link href={`/app/${organizationId}`}>Overview</Link>
+        {permissions.includes(Permission.SALES_VIEW) && (
+          <Link href={`/app/${organizationId}/sales`}>Sales</Link>
+        )}
+        {permissions.includes(Permission.CUSTOMERS_VIEW) && (
+          <Link href={`/app/${organizationId}/customers`}>Customers</Link>
+        )}
         {permissions.includes(Permission.CATALOG_VIEW) && (
           <Link href={`/app/${organizationId}/catalog`}>Catalog</Link>
         )}

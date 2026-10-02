@@ -9,6 +9,7 @@ import { InventorySettingsService } from './settings.service.js';
 
 @Module({
   imports: [PrismaModule, AuthorizationModule],
+  exports: [InventoryCommandsService],
   controllers: [InventoryController],
   providers: [
     InventoryCommandsService,

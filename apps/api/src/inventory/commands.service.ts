@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -122,7 +122,8 @@ export class InventoryCommandsService {
     const permission =
       original.type === 'TRANSFER' ? Permission.INVENTORY_TRANSFER : Permission.INVENTORY_ADJUST;
     if (!context.permissions.includes(permission)) throw new ForbiddenException();
-    if (original.type === 'REVERSAL') inventoryConflict('INVENTORY_REVERSAL_NOT_ALLOWED');
+    if (original.type === 'REVERSAL' || original.type === 'SALE')
+      inventoryConflict('INVENTORY_REVERSAL_NOT_ALLOWED');
     return this.execute(
       org,
       actor,
@@ -173,57 +174,18 @@ export class InventoryCommandsService {
           }))
         )
           inventoryConflict('INVENTORY_TRANSACTION_ALREADY_REVERSED');
-        const settings = await tx.inventorySettings.findUniqueOrThrow({
-          where: { organizationId: org },
-        });
-        const balances: Array<Entry & { quantity: Prisma.Decimal }> = [];
-        for (const entry of entries) {
-          const where = {
-            organizationId: org,
-            locationId: entry.locationId,
-            variantId: entry.variantId,
-          };
-          if (
-            type === 'OPENING_BALANCE' &&
-            (await tx.inventoryLedgerEntry.findFirst({ where, select: { id: true } }))
-          )
-            inventoryConflict('OPENING_BALANCE_ALREADY_INITIALIZED');
-          const balance = await tx.inventoryBalance.findUnique({
-            where: { organizationId_locationId_variantId: where },
-          });
-          const next = (balance?.quantity ?? new Prisma.Decimal(0)).plus(entry.delta);
-          if (next.abs().gt(maximum)) inventoryConflict('INVENTORY_QUANTITY_OVERFLOW');
-          if (!settings.allowNegativeStock && next.lt(0)) inventoryConflict('INSUFFICIENT_STOCK');
-          balances.push({ ...entry, quantity: next });
-        }
-        const transaction = await tx.inventoryTransaction.create({
-          data: {
-            organizationId: org,
-            type,
-            createdByUserId: actor,
-            idempotencyKey: key,
-            requestHash,
-            note: normalizedNote(note),
-            reason,
-            reversesTransactionId,
-          },
-        });
-        for (const entry of balances) {
-          const where = {
-            organizationId: org,
-            locationId: entry.locationId,
-            variantId: entry.variantId,
-          };
-          await tx.inventoryLedgerEntry.create({
-            data: { ...where, transactionId: transaction.id, quantityDelta: entry.delta },
-          });
-          await tx.inventoryBalance.upsert({
-            where: { organizationId_locationId_variantId: where },
-            create: { ...where, quantity: entry.quantity },
-            update: { quantity: entry.quantity },
-          });
-        }
-        return transaction.id;
+        return this.record(
+          tx,
+          org,
+          actor,
+          key,
+          type,
+          note,
+          reason,
+          requestHash,
+          entries,
+          reversesTransactionId,
+        );
       },
       {
         maxWait: 10000,
@@ -233,9 +195,113 @@ export class InventoryCommandsService {
     );
     return this.transactions.get(org, id);
   }
+  // One writer for manual movements and Sales; caller owns the transaction.
+  private async record(
+    tx: InventoryTx,
+    org: string,
+    actor: string,
+    key: string,
+    type: InventoryTransactionType,
+    note: string | null | undefined,
+    reason: AdjustmentReason | null,
+    requestHash: string,
+    entries: Entry[],
+    reversesTransactionId?: string,
+    salesOrderId?: string,
+  ) {
+    const settings = await tx.inventorySettings.findUniqueOrThrow({
+      where: { organizationId: org },
+    });
+    const balances: Array<Entry & { quantity: Prisma.Decimal }> = [];
+    for (const entry of entries) {
+      const where = {
+        organizationId: org,
+        locationId: entry.locationId,
+        variantId: entry.variantId,
+      };
+      if (
+        type === 'OPENING_BALANCE' &&
+        (await tx.inventoryLedgerEntry.findFirst({ where, select: { id: true } }))
+      )
+        inventoryConflict('OPENING_BALANCE_ALREADY_INITIALIZED');
+      const balance = await tx.inventoryBalance.findUnique({
+        where: { organizationId_locationId_variantId: where },
+      });
+      const next = (balance?.quantity ?? new Prisma.Decimal(0)).plus(entry.delta);
+      if (next.abs().gt(maximum)) inventoryConflict('INVENTORY_QUANTITY_OVERFLOW');
+      if (!settings.allowNegativeStock && next.lt(0)) inventoryConflict('INSUFFICIENT_STOCK');
+      balances.push({ ...entry, quantity: next });
+    }
+    const transaction = await tx.inventoryTransaction.create({
+      data: {
+        organizationId: org,
+        type,
+        createdByUserId: actor,
+        idempotencyKey: key,
+        requestHash,
+        note: normalizedNote(note),
+        reason,
+        reversesTransactionId,
+        salesOrderId,
+      },
+    });
+    for (const entry of balances) {
+      const where = {
+        organizationId: org,
+        locationId: entry.locationId,
+        variantId: entry.variantId,
+      };
+      await tx.inventoryLedgerEntry.create({
+        data: { ...where, transactionId: transaction.id, quantityDelta: entry.delta },
+      });
+      await tx.inventoryBalance.upsert({
+        where: { organizationId_locationId_variantId: where },
+        create: { ...where, quantity: entry.quantity },
+        update: { quantity: entry.quantity },
+      });
+    }
+    return transaction.id;
+  }
+  async recordSale(
+    tx: InventoryTx,
+    org: string,
+    actor: string,
+    salesOrderId: string,
+    entries: Entry[],
+  ) {
+    if (!entries.length) return;
+    // Sales already holds all shared resource gates in sorted order, including services.
+    for (const key of [
+      ...new Set(entries.map((e) => stockKey(org, e.locationId, e.variantId))),
+    ].sort())
+      await inventoryLock(tx, key);
+    return this.record(
+      tx,
+      org,
+      actor,
+      randomUUID(),
+      'SALE',
+      null,
+      null,
+      hash(['SALE', salesOrderId]),
+      entries,
+      undefined,
+      salesOrderId,
+    );
+  }
   private async resources(tx: InventoryTx, org: string, entries: Entry[]) {
-    const variantIds = [...new Set(entries.map((entry) => entry.variantId))];
-    const locationIds = [...new Set(entries.map((entry) => entry.locationId))];
+    const variants = await this.lockResources(
+      tx,
+      org,
+      entries.map((e) => e.variantId),
+      entries.map((e) => e.locationId),
+    );
+    if (variants.some((variant) => variant.item.type !== 'PRODUCT' || !variant.item.trackInventory))
+      inventoryConflict('INVENTORY_TRACKING_DISABLED');
+  }
+  async lockResources(tx: InventoryTx, org: string, ids: string[], locationsToLock: string[]) {
+    const variantIds = [...new Set(ids)];
+    const locationIds = [...new Set(locationsToLock)];
     const initial = await tx.catalogVariant.findMany({
       where: { organizationId: org, id: { in: variantIds } },
       select: { catalogItemId: true },
@@ -256,12 +322,11 @@ export class InventoryCommandsService {
     });
     if (variants.length !== variantIds.length || locations.length !== locationIds.length)
       throw new NotFoundException();
-    if (variants.some((variant) => variant.item.type !== 'PRODUCT' || !variant.item.trackInventory))
-      inventoryConflict('INVENTORY_TRACKING_DISABLED');
     if (
       variants.some((variant) => !variant.isActive || !variant.item.isActive) ||
       locations.some((location) => !location.isActive)
     )
       inventoryConflict('INVENTORY_RESOURCE_INACTIVE');
+    return variants;
   }
 }
