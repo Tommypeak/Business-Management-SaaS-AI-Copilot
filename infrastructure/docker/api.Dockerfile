@@ -8,8 +8,9 @@ WORKDIR /app
 COPY . .
 RUN --mount=type=cache,id=pnpm-api,target=/pnpm/store \
     pnpm install --frozen-lockfile --store-dir /pnpm/store
-RUN pnpm --filter @saas/api generate && pnpm --filter @saas/api build
-RUN pnpm --filter @saas/api deploy --legacy --prod /out
+RUN pnpm --filter @saas/api generate && pnpm --filter @saas/api... build
+RUN --mount=type=cache,id=pnpm-api,target=/pnpm/store \
+    pnpm --filter @saas/api deploy --prod --offline --store-dir /pnpm/store /out
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app

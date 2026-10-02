@@ -9,3 +9,525 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum BusinessType {
+  RETAIL
+  SERVICES
+  WHOLESALE
+  FOOD_SERVICE
+  MIXED
+  OTHER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum LocationType {
+  STORE
+  WAREHOUSE
+  OFFICE
+  SERVICE_POINT
+  OTHER
+}
+
+model User {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  authProvider          String                   @db.VarChar(512)
+  authSubject           String                   @db.VarChar(255)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
+  memberships           OrganizationMembership[]
+  inventoryTransactions InventoryTransaction[]
+  salesOrders           SalesOrder[]
+  salesPayments         SalesPayment[]
+
+  @@unique([authProvider, authSubject])
+}
+
+model Organization {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  name                  String                   @db.VarChar(120)
+  businessType          BusinessType
+  defaultCurrency       String                   @db.Char(3)
+  timezone              String                   @db.VarChar(100)
+  locale                String                   @default("en") @db.VarChar(35)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
+  memberships           OrganizationMembership[]
+  roles                 Role[]
+  locations             Location[]
+  catalogItems          CatalogItem[]
+  catalogCategories     CatalogCategory[]
+  customFields          CustomFieldDefinition[]
+  inventorySettings     InventorySettings?
+  customers             Customer[]
+  salesOrders           SalesOrder[]
+  salesSequence         SalesSequence?
+  inventoryTransactions InventoryTransaction[]
+}
+
+model OrganizationMembership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  userId         String           @db.Uuid
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles          MembershipRole[]
+
+  @@unique([organizationId, userId])
+  @@unique([id, organizationId])
+  @@index([userId, status])
+}
+
+model Role {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  name           String           @db.VarChar(80)
+  key            String           @db.VarChar(80)
+  isSystem       Boolean          @default(false)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions    RolePermission[]
+  memberships    MembershipRole[]
+
+  @@unique([organizationId, key])
+  @@unique([id, organizationId])
+}
+
+model RolePermission {
+  organizationId String @db.Uuid
+  roleId         String @db.Uuid
+  permissionCode String @db.VarChar(80)
+  role           Role   @relation(fields: [roleId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@id([roleId, permissionCode])
+  @@index([organizationId])
+}
+
+model MembershipRole {
+  organizationId String                 @db.Uuid
+  membershipId   String                 @db.Uuid
+  roleId         String                 @db.Uuid
+  membership     OrganizationMembership @relation(fields: [membershipId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  role           Role                   @relation(fields: [roleId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@id([membershipId, roleId])
+  @@index([roleId, organizationId])
+  @@index([organizationId])
+}
+
+model Location {
+  salesOrders       SalesOrder[]
+  id                String                 @id @default(uuid()) @db.Uuid
+  organizationId    String                 @db.Uuid
+  name              String                 @db.VarChar(120)
+  type              LocationType
+  isActive          Boolean                @default(true)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inventoryBalances InventoryBalance[]
+  inventoryEntries  InventoryLedgerEntry[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, createdAt, id])
+}
+
+enum CatalogItemType {
+  PRODUCT
+  SERVICE
+}
+
+enum UnitOfMeasure {
+  PIECE
+  KILOGRAM
+  GRAM
+  LITER
+  MILLILITER
+  METER
+  CENTIMETER
+  HOUR
+  MINUTE
+  SERVICE
+  OTHER
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  DATE
+  SELECT
+  MULTI_SELECT
+}
+
+model CatalogCategory {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  name           String            @db.VarChar(120)
+  parentId       String?           @db.Uuid
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @db.Timestamptz(3)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent         CatalogCategory?  @relation("CategoryTree", fields: [parentId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: NoAction)
+  children       CatalogCategory[] @relation("CategoryTree")
+  items          CatalogItem[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, isActive, id])
+  @@index([parentId, organizationId])
+}
+
+model CatalogItem {
+  id             String                        @id @default(uuid()) @db.Uuid
+  organizationId String                        @db.Uuid
+  type           CatalogItemType
+  name           String                        @db.VarChar(200)
+  description    String?                       @db.VarChar(5000)
+  categoryId     String?                       @db.Uuid
+  trackInventory Boolean                       @default(false)
+  isActive       Boolean                       @default(true)
+  createdAt      DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                      @updatedAt @db.Timestamptz(3)
+  organization   Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category       CatalogCategory?              @relation(fields: [categoryId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variants       CatalogVariant[]
+  options        CatalogOption[]
+  customFields   CatalogItemCustomFieldValue[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, isActive, createdAt, id])
+  @@index([organizationId, categoryId])
+  @@index([organizationId, type])
+  @@index([organizationId, name, id])
+  @@index([organizationId, updatedAt, id])
+}
+
+model CatalogVariant {
+  salesItems        SalesOrderItem[]
+  id                String                 @id @default(uuid()) @db.Uuid
+  organizationId    String                 @db.Uuid
+  catalogItemId     String                 @db.Uuid
+  name              String?                @db.VarChar(120)
+  sku               String?                @db.VarChar(80)
+  barcode           String?                @db.VarChar(120)
+  sellingPrice      Decimal                @db.Decimal(19, 4)
+  costPrice         Decimal?               @db.Decimal(19, 4)
+  unit              UnitOfMeasure
+  isDefault         Boolean                @default(false)
+  isActive          Boolean                @default(true)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+  item              CatalogItem            @relation(fields: [catalogItemId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  optionValues      VariantOptionValue[]
+  inventoryBalances InventoryBalance[]
+  inventoryEntries  InventoryLedgerEntry[]
+
+  @@unique([id, organizationId])
+  @@unique([id, catalogItemId, organizationId])
+  @@unique([organizationId, sku])
+  @@unique([organizationId, barcode])
+  @@index([catalogItemId, organizationId, id])
+}
+
+model CatalogOption {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  catalogItemId  String               @db.Uuid
+  name           String               @db.VarChar(80)
+  position       Int                  @default(0)
+  isActive       Boolean              @default(true)
+  item           CatalogItem          @relation(fields: [catalogItemId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  values         CatalogOptionValue[]
+
+  @@unique([id, catalogItemId, organizationId])
+  @@unique([catalogItemId, name])
+  @@index([organizationId, catalogItemId])
+}
+
+model CatalogOptionValue {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  catalogItemId  String               @db.Uuid
+  optionId       String               @db.Uuid
+  value          String               @db.VarChar(80)
+  position       Int                  @default(0)
+  isActive       Boolean              @default(true)
+  option         CatalogOption        @relation(fields: [optionId, catalogItemId, organizationId], references: [id, catalogItemId, organizationId], onDelete: Cascade)
+  variants       VariantOptionValue[]
+
+  @@unique([id, optionId, catalogItemId, organizationId])
+  @@unique([optionId, value])
+  @@index([organizationId, catalogItemId])
+}
+
+model VariantOptionValue {
+  organizationId String             @db.Uuid
+  catalogItemId  String             @db.Uuid
+  variantId      String             @db.Uuid
+  optionId       String             @db.Uuid
+  optionValueId  String             @db.Uuid
+  variant        CatalogVariant     @relation(fields: [variantId, catalogItemId, organizationId], references: [id, catalogItemId, organizationId], onDelete: Cascade)
+  optionValue    CatalogOptionValue @relation(fields: [optionValueId, optionId, catalogItemId, organizationId], references: [id, optionId, catalogItemId, organizationId], onDelete: Restrict)
+
+  @@id([variantId, optionId])
+  @@index([optionValueId, optionId, catalogItemId, organizationId])
+  @@index([organizationId, catalogItemId])
+}
+
+model CustomFieldDefinition {
+  id             String                        @id @default(uuid()) @db.Uuid
+  organizationId String                        @db.Uuid
+  name           String                        @db.VarChar(120)
+  key            String                        @db.VarChar(64)
+  type           CustomFieldType
+  isRequired     Boolean                       @default(false)
+  isActive       Boolean                       @default(true)
+  createdAt      DateTime                      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                      @updatedAt @db.Timestamptz(3)
+  organization   Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  options        CustomFieldOption[]
+  values         CatalogItemCustomFieldValue[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, key])
+  @@index([organizationId, isActive, id])
+}
+
+model CustomFieldOption {
+  id                String                @id @default(uuid()) @db.Uuid
+  organizationId    String                @db.Uuid
+  fieldDefinitionId String                @db.Uuid
+  label             String                @db.VarChar(120)
+  value             String                @db.VarChar(80)
+  position          Int                   @default(0)
+  isActive          Boolean               @default(true)
+  definition        CustomFieldDefinition @relation(fields: [fieldDefinitionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([fieldDefinitionId, value])
+  @@index([organizationId, fieldDefinitionId])
+}
+
+model CatalogItemCustomFieldValue {
+  organizationId    String                @db.Uuid
+  catalogItemId     String                @db.Uuid
+  fieldDefinitionId String                @db.Uuid
+  value             Json                  @db.JsonB
+  item              CatalogItem           @relation(fields: [catalogItemId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  definition        CustomFieldDefinition @relation(fields: [fieldDefinitionId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@id([catalogItemId, fieldDefinitionId])
+  @@index([organizationId, fieldDefinitionId])
+}
+
+enum InventoryTransactionType {
+  SALE
+  OPENING_BALANCE
+  ADJUSTMENT
+  TRANSFER
+  REVERSAL
+}
+
+enum InventoryAdjustmentReason {
+  COUNT_CORRECTION
+  DAMAGE
+  LOSS
+  FOUND
+  OTHER
+}
+
+model InventorySettings {
+  organizationId     String       @id @db.Uuid
+  allowNegativeStock Boolean      @default(false)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model InventoryTransaction {
+  salesOrderId          String?                    @unique @db.Uuid
+  salesOrder            SalesOrder?                @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  id                    String                     @id @default(uuid()) @db.Uuid
+  organizationId        String                     @db.Uuid
+  type                  InventoryTransactionType
+  createdByUserId       String                     @db.Uuid
+  idempotencyKey        String                     @db.Uuid
+  requestHash           String                     @db.Char(64)
+  note                  String?                    @db.VarChar(2000)
+  reason                InventoryAdjustmentReason?
+  reversesTransactionId String?                    @unique @db.Uuid
+  createdAt             DateTime                   @default(now()) @db.Timestamptz(3)
+  organization          Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy             User                       @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  reverses              InventoryTransaction?      @relation("InventoryReversals", fields: [reversesTransactionId, organizationId], references: [id, organizationId], onDelete: Restrict, onUpdate: NoAction)
+  reversals             InventoryTransaction[]     @relation("InventoryReversals")
+  entries               InventoryLedgerEntry[]
+
+  @@unique([salesOrderId, organizationId])
+  @@unique([id, organizationId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt, id])
+}
+
+model InventoryLedgerEntry {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  transactionId  String               @db.Uuid
+  locationId     String               @db.Uuid
+  variantId      String               @db.Uuid
+  quantityDelta  Decimal              @db.Decimal(19, 6)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  transaction    InventoryTransaction @relation(fields: [transactionId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  location       Location             @relation(fields: [locationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant        CatalogVariant       @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([transactionId, locationId, variantId])
+  @@index([organizationId, locationId, variantId, createdAt])
+  @@index([organizationId, variantId, createdAt])
+}
+
+model InventoryBalance {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  locationId     String         @db.Uuid
+  variantId      String         @db.Uuid
+  quantity       Decimal        @db.Decimal(19, 6)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  location       Location       @relation(fields: [locationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant        CatalogVariant @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([organizationId, locationId, variantId])
+  @@index([organizationId, variantId])
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  BUSINESS
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  QR
+  OTHER
+}
+
+model Customer {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  type           CustomerType
+  name           String       @db.VarChar(200)
+  email          String?      @db.VarChar(254)
+  phone          String?      @db.VarChar(50)
+  notes          String?      @db.VarChar(2000)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  orders         SalesOrder[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, createdAt, id])
+  @@index([organizationId, isActive, createdAt, id])
+}
+
+model SalesSequence {
+  organizationId String       @id @db.Uuid
+  lastNumber     Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model SalesOrder {
+  id                       String                @id @default(uuid()) @db.Uuid
+  organizationId           String                @db.Uuid
+  sequenceNumber           Int
+  status                   SalesOrderStatus      @default(DRAFT)
+  locationId               String?               @db.Uuid
+  customerId               String?               @db.Uuid
+  currencyCode             String                @db.Char(3)
+  note                     String?               @db.VarChar(2000)
+  subtotal                 Decimal               @default(0) @db.Decimal(19, 4)
+  discountTotal            Decimal               @default(0) @db.Decimal(19, 4)
+  total                    Decimal               @default(0) @db.Decimal(19, 4)
+  createdByUserId          String                @db.Uuid
+  createdAt                DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime              @updatedAt @db.Timestamptz(3)
+  completedAt              DateTime?             @db.Timestamptz(3)
+  cancelledAt              DateTime?             @db.Timestamptz(3)
+  creationIdempotencyKey   String                @db.Uuid
+  creationRequestHash      String                @db.Char(64)
+  completionIdempotencyKey String?               @db.Uuid
+  completionRequestHash    String?               @db.Char(64)
+  organization             Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy                User                  @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  customer                 Customer?             @relation(fields: [customerId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  location                 Location?             @relation(fields: [locationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  items                    SalesOrderItem[]
+  payments                 SalesPayment[]
+  inventoryTransaction     InventoryTransaction?
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sequenceNumber])
+  @@unique([organizationId, creationIdempotencyKey])
+  @@unique([organizationId, completionIdempotencyKey])
+  @@index([organizationId, createdAt, id])
+  @@index([organizationId, status, createdAt, id])
+  @@index([organizationId, customerId, createdAt, id])
+  @@index([organizationId, locationId, createdAt, id])
+}
+
+model SalesOrderItem {
+  stockDeducted       Boolean        @default(false)
+  id                  String         @id @default(uuid()) @db.Uuid
+  organizationId      String         @db.Uuid
+  salesOrderId        String         @db.Uuid
+  variantId           String         @db.Uuid
+  quantity            Decimal        @db.Decimal(19, 6)
+  unitPrice           Decimal        @db.Decimal(19, 4)
+  discountAmount      Decimal        @db.Decimal(19, 4)
+  lineTotal           Decimal        @db.Decimal(19, 4)
+  snapshotItemName    String         @db.VarChar(200)
+  snapshotVariantName String?        @db.VarChar(120)
+  snapshotSku         String?        @db.VarChar(80)
+  snapshotUnit        UnitOfMeasure
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  order               SalesOrder     @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant             CatalogVariant @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([salesOrderId, variantId])
+  @@index([organizationId, salesOrderId])
+  @@index([organizationId, variantId])
+}
+
+model SalesPayment {
+  id              String        @id @default(uuid()) @db.Uuid
+  organizationId  String        @db.Uuid
+  salesOrderId    String        @db.Uuid
+  amount          Decimal       @db.Decimal(19, 4)
+  method          PaymentMethod
+  reference       String?       @db.VarChar(200)
+  note            String?       @db.VarChar(2000)
+  createdByUserId String        @db.Uuid
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  idempotencyKey  String        @db.Uuid
+  requestHash     String        @db.Char(64)
+  order           SalesOrder    @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdBy       User          @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, salesOrderId, createdAt, id])
+}

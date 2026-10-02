@@ -2,9 +2,19 @@
 
 ## Project
 
-Технический фундамент будущей multi-tenant SaaS-платформы. Stage 1 содержит только
-инфраструктуру, конфигурацию приложений, health endpoints и проверки качества.
-Бизнес-функции, authentication, multi-tenancy и AI-интеграции пока не реализованы.
+Технический фундамент multi-tenant SaaS-платформы. Stage 2 добавляет managed
+authentication через Clerk, локальную identity, организации, memberships, RBAC
+и Locations. Stage 3 добавляет универсальный каталог товаров и услуг: категории,
+варианты, цены, SKU/barcode, options и типизированные custom fields.
+Stage 4 добавляет inventory ledger, остатки по Locations, opening balances,
+корректировки, перемещения, reversals и negative-stock policy.
+Stage 5 добавляет Customers, draft Sales Orders, completion с атомарным списанием
+Inventory, snapshot цен/названий и частичные/полные ручные Payments.
+Закупки, возвраты, налоги, оценка стоимости запасов и AI-интеграции ещё не реализованы.
+Подробности безопасности, API и настройки identity: [Stage 2](docs/stage-2.md).
+Архитектура, ограничения и API каталога: [Stage 3](docs/stage-3.md).
+Складской учёт, блокировки, idempotency и API: [Stage 4](docs/stage-4.md).
+Продажи, клиенты, оплаты, транзакции и ограничения: [Stage 5](docs/stage-5.md).
 
 ## Architecture
 
@@ -15,25 +25,34 @@ Next.js → NestJS → PostgreSQL
 NestJS → FastAPI AI Service
 ```
 
-Это целевое направление взаимодействия. На Stage 1 web не вызывает API, а API ещё
-не вызывает AI. NestJS уже подключается к PostgreSQL и Redis.
+Web вызывает NestJS из server components/actions с проверяемым JWT. NestJS хранит
+identity и tenant authorization в PostgreSQL; Redis доступен для readiness.
+Взаимодействие с AI пока является целевым направлением, без вызовов ML/LLM.
 
 Основной backend — modular monolith. Будущие бизнес-модули будут размещаться внутри
 NestJS. Python-сервис выделен отдельно для Python/ML ecosystem.
 
 ```text
 apps/
-  web/                   Next.js App Router, Tailwind, frontend health
+  web/                   Next.js, Clerk, organization/catalog/inventory/sales UI
   api/
-    prisma/              Схема Prisma без моделей
+    prisma/              Identity/tenancy/catalog/inventory/sales schema и migrations
     prisma.config.ts     Настройки Prisma CLI
     src/
       config/            Проверка переменных окружения
       prisma/            PrismaModule / PrismaService
       redis/             Подключение Redis и ping
       health/            Liveness / readiness
+      auth/              JWT verification, local identity, default auth guard
+      authorization/     Membership и permission guards
+      organizations/     Атомарное создание, настройки, список members/roles
+      locations/         Tenant-scoped Locations
+      catalog/           Items, variants, categories, options, custom fields
+      inventory/         Commands, ledger history, stock projection, settings
+      sales/             Customers, orders, totals, payments, Inventory integration
+      common/            DTO pagination и безопасный exception filter
       generated/         Сгенерированный Prisma Client, исключён из Git
-    test/                HTTP smoke tests через Fastify injection
+    test/                Smoke + JWT/RBAC/catalog/inventory/sales/concurrency tests
   ai/
     app/api/             HTTP routes
     app/core/            Pydantic settings
@@ -42,7 +61,7 @@ apps/
     pyproject.toml
     uv.lock
 packages/
-  types/                 Только общие TypeScript types
+  types/                 Безопасные API contracts и общие enum/permission constants
   config/                Общая строгая конфигурация TypeScript
   eslint-config/         Конфигурации для web, API и shared packages
 infrastructure/docker/   Production Dockerfiles
@@ -51,7 +70,7 @@ scripts/                 Запуск приложений с корневым .
 docker-compose.yml       Локальные PostgreSQL и Redis
 ```
 
-Frontend импортирует только общие типы из `@saas/types`, без импорта backend source.
+Frontend импортирует контракты и константы из `@saas/types`, без импорта backend source.
 `@saas/config` не содержит runtime-настроек или секретов.
 
 ## Requirements
@@ -74,7 +93,7 @@ uv автоматически установит подходящий Python п�
 1. Клонируйте репозиторий:
 
    ```sh
-   git clone <repository-url> business-management-saas
+   git clone https://github.com/Tommypeak/Business-Management-SaaS-AI-Copilot.git business-management-saas
    cd business-management-saas
    ```
 
@@ -108,7 +127,24 @@ uv автоматически установит подходящий Python п�
    и соответствующий порт в `DATABASE_URL`. Для Redis аналогично измените
    `REDIS_PORT` и `REDIS_URL`.
 
-5. Запустите все приложения:
+5. Примените миграции и подготовьте отдельную test database:
+
+   ```sh
+   pnpm --filter @saas/api db:migrate
+   docker compose exec -T postgres createdb -U saas business_management_test
+   ```
+
+   `createdb` нужен один раз; замените `saas`, если меняли `POSTGRES_USER`.
+   В `.env` задайте `TEST_DATABASE_URL` с теми же локальными credentials и портом,
+   но с database `business_management_test`. Тесты создают и удаляют только свою
+   случайную schema в этой БД. Пользователю БД требуется право `CREATE` schema.
+   Если порт PostgreSQL менялся, обновите оба database URL.
+
+6. Настройте Clerk по [инструкции Stage 2](docs/stage-2.md#clerk-configuration).
+   Без credentials landing и health доступны, но вход и `/app` возвращают 503.
+   Production API требует `AUTH_ISSUER` и `AUTH_JWKS_URL` при старте.
+
+7. Запустите все приложения:
 
    ```sh
    pnpm dev
@@ -122,9 +158,10 @@ uv автоматически установит подходящий Python п�
 
    Можно запускать отдельно: `pnpm --filter @saas/web dev`,
    `pnpm --filter @saas/api dev`, `pnpm --filter @saas/ai dev`.
-   Перед отдельным первым запуском API выполните `pnpm db:generate`.
+   Перед отдельным первым запуском API выполните `pnpm db:generate` и
+   `pnpm --filter @saas/types build` (общие константы нужны в runtime).
 
-6. Проверьте endpoints:
+8. Проверьте endpoints:
 
    ```sh
    curl http://127.0.0.1:3000/api/health
@@ -135,29 +172,37 @@ uv автоматически установит подходящий Python п�
 
 ## Commands
 
-| Команда                               | Назначение                                                   |
-| ------------------------------------- | ------------------------------------------------------------ |
-| `pnpm dev`                            | Три приложения в режиме разработки                           |
-| `pnpm build`                          | Next.js production build, NestJS compile, Python wheel/sdist |
-| `pnpm lint`                           | ESLint для TypeScript и Ruff для Python                      |
-| `pnpm typecheck`                      | Next route types + strict TypeScript, strict mypy            |
-| `pnpm test`                           | API HTTP smoke tests и Python pytest                         |
-| `pnpm format`                         | Prettier и Ruff formatter                                    |
-| `pnpm format:check`                   | Проверка форматирования без изменений                        |
-| `pnpm ai:install`                     | `uv sync --locked` для Python                                |
-| `pnpm db:generate`                    | Генерация Prisma Client без подключения к БД                 |
-| `pnpm --filter @saas/api db:validate` | Валидация Prisma schema                                      |
-| `pnpm infra:up`                       | Compose up с ожиданием healthy                               |
-| `pnpm infra:down`                     | Остановка инфраструктуры с сохранением volumes               |
+| Команда                                                | Назначение                                                     |
+| ------------------------------------------------------ | -------------------------------------------------------------- |
+| `pnpm dev`                                             | Три приложения в режиме разработки                             |
+| `pnpm build`                                           | Next.js production build, NestJS compile, Python wheel/sdist   |
+| `pnpm lint`                                            | ESLint для TypeScript и Ruff для Python                        |
+| `pnpm typecheck`                                       | Next route types + strict TypeScript, strict mypy              |
+| `pnpm test`                                            | API smoke/integration tests с PostgreSQL/Redis и Python pytest |
+| `pnpm format`                                          | Prettier и Ruff formatter                                      |
+| `pnpm format:check`                                    | Проверка форматирования без изменений                          |
+| `pnpm ai:install`                                      | `uv sync --locked` для Python                                  |
+| `pnpm db:generate`                                     | Генерация Prisma Client без подключения к БД                   |
+| `pnpm --filter @saas/api db:validate`                  | Валидация Prisma schema                                        |
+| `pnpm --filter @saas/api db:migrate`                   | Применение существующих migrations (`migrate deploy`)          |
+| `pnpm --filter @saas/api db:migrate:dev --name <name>` | Создание новой development migration                           |
+| `pnpm infra:up`                                        | Compose up с ожиданием healthy                                 |
+| `pnpm infra:down`                                      | Остановка инфраструктуры с сохранением volumes                 |
 
 После `pnpm build` доступны отдельные `pnpm --filter @saas/web start`,
 `pnpm --filter @saas/api start`, `pnpm --filter @saas/ai start`.
 Для полноценного production запуска предпочтительны Docker images ниже.
 
-Web проверяется production-сборкой. API tests не требуют базы: проверяют реальные
-Nest routes через Fastify injection с подменой инфраструктурных providers, включая
-readiness failures и CORS. CI отдельно проверяет контейнеры с настоящими PostgreSQL
-и Redis. Root-команды включают Python через небольшой package.json-адаптер для Turbo;
+Web проверяется production-сборкой. API smoke tests проверяют readiness failures
+и CORS с подменой infrastructure providers; integration tests используют настоящий
+PostgreSQL, Redis и локальный JWKS с временным ключом. Они требуют
+`TEST_DATABASE_URL` и не пропускаются молча. Реальные Clerk credentials не нужны.
+Catalog scenarios проверяют ограничения БД, tenant isolation, точность цен,
+конкурентные изменения и permission backfill на организации, созданной до Stage 3.
+Inventory scenarios проверяют projection = SUM(ledger), Decimal quantities,
+конкурентные команды, idempotency, reversals и гонки с изменениями Catalog/Locations.
+CI также проверяет контейнеры с PostgreSQL и Redis.
+Root-команды включают Python через небольшой package.json-адаптер для Turbo;
 Python-зависимостями управляет исключительно uv.
 
 Husky запускает lint-staged: изменённые TS/JS/JSON/Markdown/YAML/CSS форматируются
@@ -170,13 +215,15 @@ Prettier. Python туда не попадает; его Ruff/mypy/pytest про�
 | ---------- | -------------------------------------------------------------------- |
 | Web        | <http://127.0.0.1:3000>                                              |
 | API        | <http://127.0.0.1:3001/api> (корневого route пока нет)               |
+| API docs   | <http://127.0.0.1:3001/api/docs> только при `NODE_ENV=development`   |
 | AI         | <http://127.0.0.1:8000> (корневого route пока нет)                   |
 | AI docs    | <http://127.0.0.1:8000/docs> только при `AI_ENVIRONMENT=development` |
 | PostgreSQL | `127.0.0.1:5432`                                                     |
 | Redis      | `127.0.0.1:6379`                                                     |
 
 `WEB_PORT`, `API_PORT`, `AI_PORT` управляют портами локального запуска.
-При изменении frontend origin обновите `API_CORS_ORIGINS`.
+При изменении frontend origin обновите `API_CORS_ORIGINS`,
+`AUTH_AUTHORIZED_PARTIES` и настройки приложения Clerk.
 
 ## Health endpoints
 
@@ -188,15 +235,26 @@ Prettier. Python туда не попадает; его Ruff/mypy/pytest про�
 | `GET /health` на AI            | `{"status":"ok","service":"ai"}`                                          |
 
 API readiness имеет таймаут 5 секунд и не возвращает детали подключения.
-Health routes нейтральны к версии; будущие API controllers по умолчанию будут
+Health routes публичны и нейтральны к версии; защищённые endpoints
 доступны под `/api/v1/...`.
 
 ## Database and runtime configuration
 
 Prisma расположен внутри API. Версия 7 использует `prisma.config.ts` для
-`DATABASE_URL` и PostgreSQL driver adapter в runtime. В schema только generator и
-datasource: Prisma поддерживает raw SQL без моделей, поэтому техническая таблица
-и пустая миграция не нужны. Миграции появятся вместе с первой реальной моделью.
+`DATABASE_URL` и PostgreSQL driver adapter в runtime. Первая migration
+`20260929084943_identity_tenancy` создаёт User, Organization,
+OrganizationMembership, Role, RolePermission, MembershipRole и Location.
+Составные foreign keys защищают assignment ролей от смешивания tenants.
+Миграция `20260929182020_universal_catalog` добавляет девять таблиц каталога,
+составные tenant foreign keys, ограничения default variant и backfill permissions
+для существующих системных ролей. Каталог использует PostgreSQL Decimal(19,4),
+а HTTP-контракты передают цены строками.
+Миграция `20260930140000_inventory_ledger` добавляет InventorySettings,
+InventoryTransaction, InventoryLedgerEntry и InventoryBalance с quantity Decimal(19,6).
+Backfill создаёт настройки и добавляет inventory permissions существующим tenants.
+История защищена PostgreSQL triggers от UPDATE/DELETE/TRUNCATE; исправления оформляются
+compensating transaction. Catalog models не содержат складских quantity-полей.
+`prisma db push` не используется: изменения схемы оформляются migrations.
 
 `PrismaModule` экспортирует `PrismaService`; будущие модули смогут явно импортировать
 его. Соединение и `SELECT 1` проверяются при старте; shutdown закрывает pool.
@@ -230,17 +288,31 @@ Web содержит Next standalone output; API — compiled JS и production d
 AI — готовый Python venv без dev tools. Build не требует секретов или запущенной БД.
 Compose содержит только инфраструктуру для разработки.
 
-В контейнере API передайте `DATABASE_URL` и `REDIS_URL` через окружение оркестратора;
+Runtime workspace dependencies упаковываются стандартным `pnpm deploy` по
+lockfile: включены `injectWorkspacePackages` и синхронизация после `build`.
+Deploy API использует offline store из предыдущего install-слоя, без повторного
+разрешения версий через registry. Подробности: [pnpm deploy](https://pnpm.io/10.x/cli/deploy).
+
+Перед релизом выполните `pnpm --filter @saas/api db:migrate` из checkout/build
+окружения с доступом к целевой БД. Runtime image API не содержит Prisma CLI;
+миграции запускаются отдельным release job, а не каждой репликой при старте.
+
+В контейнере API передайте `DATABASE_URL`, `REDIS_URL`, `AUTH_ISSUER`,
+`AUTH_JWKS_URL` и при необходимости `AUTH_AUDIENCE`, `AUTH_AUTHORIZED_PARTIES`;
 имена хостов в Compose network — `postgres` и `redis`, внутренние порты — 5432/6379.
 API image уже задаёт `API_HOST=0.0.0.0`, `API_PORT=3001`, `NODE_ENV=production`.
-Web standalone использует `PORT` (3000) и `HOSTNAME` (0.0.0.0).
+Web standalone использует `PORT` (3000) и `HOSTNAME` (0.0.0.0). Передайте ему
+`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` и `API_BASE_URL` в runtime.
+Ключи читаются сервером; build не требует Clerk credentials. В контейнерной сети
+`API_BASE_URL` должен указывать на сервис API, а не localhost web-контейнера.
 AI слушает 8000; при необходимости измените uvicorn command.
 Пароли не передаются через build arguments и не сохраняются в image.
 
 ## CI
 
 GitHub Actions запускается на push и pull request. Quality job устанавливает
-зависимости по lockfiles и запускает format check, lint, typecheck, tests и build.
+зависимости по lockfiles, поднимает PostgreSQL/Redis, применяет migrations и
+запускает format check, lint, typecheck, integration tests и build.
 Container job поднимает изолированную инфраструктуру, собирает три Docker image
 и проверяет HTTP health/readiness. CI генерирует временный пароль БД и не требует
 production secrets. Настроены pnpm, uv и Docker build caches.

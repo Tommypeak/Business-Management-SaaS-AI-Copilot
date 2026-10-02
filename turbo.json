@@ -14,8 +14,16 @@
     "AI_HOST",
     "AI_ENVIRONMENT",
     "UV_PYTHON",
-    "CI"
+    "CI",
+    "AUTH_ISSUER",
+    "AUTH_JWKS_URL",
+    "AUTH_AUDIENCE",
+    "AUTH_AUTHORIZED_PARTIES",
+    "CLERK_SECRET_KEY",
+    "API_BASE_URL",
+    "TEST_DATABASE_URL"
   ],
+  "globalEnv": ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"],
   "tasks": {
     "generate": { "cache": false },
     "build": {

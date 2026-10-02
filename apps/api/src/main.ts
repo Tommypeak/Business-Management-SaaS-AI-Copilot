@@ -6,6 +6,7 @@ import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify
 import { AppModule } from './app.module.js';
 import { configureApplication } from './bootstrap.js';
 import type { Environment } from './config/environment.js';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -16,6 +17,17 @@ async function bootstrap(): Promise<void> {
   try {
     const config = app.get(ConfigService<Environment, true>);
     await configureApplication(app, config.get('API_CORS_ORIGINS', { infer: true }));
+    if (config.get('NODE_ENV', { infer: true }) === 'development') {
+      const document = SwaggerModule.createDocument(
+        app,
+        new DocumentBuilder()
+          .setTitle('Business Management API')
+          .setVersion('1')
+          .addBearerAuth()
+          .build(),
+      );
+      SwaggerModule.setup('api/docs', app, document);
+    }
     await app.listen(
       config.get('API_PORT', { infer: true }),
       config.get('API_HOST', { infer: true }),
