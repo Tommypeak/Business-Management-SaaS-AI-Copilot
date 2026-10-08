@@ -27,6 +27,7 @@ function serialize(row: Row): InventoryTransactionResponse {
     id: row.id,
     type: row.type,
     salesOrderId: row.salesOrderId,
+    goodsReceiptId: row.goodsReceiptId,
     reason: row.reason,
     createdAt: row.createdAt.toISOString(),
     createdBy: { id: row.createdByUserId },

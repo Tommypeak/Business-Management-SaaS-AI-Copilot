@@ -18,6 +18,7 @@ export default async function TransactionPage({
   const reverse =
     row.type !== 'REVERSAL' &&
     row.type !== 'SALE' &&
+    row.type !== 'PURCHASE_RECEIPT' &&
     !row.reversedByTransactionId &&
     organization.currentMembership.permissions.includes(permission);
   const base = `/app/${org}/inventory/history`;
@@ -36,6 +37,18 @@ export default async function TransactionPage({
               Source sale:{' '}
               <Link className="underline" href={`/app/${org}/sales/${row.salesOrderId}`}>
                 {row.salesOrderId}
+              </Link>
+            </p>
+          )}
+        {row.goodsReceiptId &&
+          organization.currentMembership.permissions.includes(Permission.PURCHASING_VIEW) && (
+            <p>
+              Source goods receipt:{' '}
+              <Link
+                className="underline"
+                href={`/app/${org}/purchasing/receipts/${row.goodsReceiptId}`}
+              >
+                {row.goodsReceiptId}
               </Link>
             </p>
           )}

@@ -42,6 +42,8 @@ model User {
   inventoryTransactions InventoryTransaction[]
   salesOrders           SalesOrder[]
   salesPayments         SalesPayment[]
+  purchaseOrders        PurchaseOrder[]
+  goodsReceipts         GoodsReceipt[]
 
   @@unique([authProvider, authSubject])
 }
@@ -66,6 +68,11 @@ model Organization {
   salesOrders           SalesOrder[]
   salesSequence         SalesSequence?
   inventoryTransactions InventoryTransaction[]
+  suppliers             Supplier[]
+  purchaseOrders        PurchaseOrder[]
+  purchaseSequence      PurchaseSequence?
+  goodsReceiptSequence  GoodsReceiptSequence?
+  goodsReceipts         GoodsReceipt[]
 }
 
 model OrganizationMembership {
@@ -124,6 +131,7 @@ model MembershipRole {
 
 model Location {
   salesOrders       SalesOrder[]
+  purchaseOrders    PurchaseOrder[]
   id                String                 @id @default(uuid()) @db.Uuid
   organizationId    String                 @db.Uuid
   name              String                 @db.VarChar(120)
@@ -212,6 +220,8 @@ model CatalogItem {
 
 model CatalogVariant {
   salesItems        SalesOrderItem[]
+  purchaseItems     PurchaseOrderItem[]
+  receiptItems      GoodsReceiptItem[]
   id                String                 @id @default(uuid()) @db.Uuid
   organizationId    String                 @db.Uuid
   catalogItemId     String                 @db.Uuid
@@ -329,6 +339,7 @@ model CatalogItemCustomFieldValue {
 
 enum InventoryTransactionType {
   SALE
+  PURCHASE_RECEIPT
   OPENING_BALANCE
   ADJUSTMENT
   TRANSFER
@@ -354,6 +365,8 @@ model InventorySettings {
 model InventoryTransaction {
   salesOrderId          String?                    @unique @db.Uuid
   salesOrder            SalesOrder?                @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  goodsReceiptId        String?                    @unique @db.Uuid
+  goodsReceipt          GoodsReceipt?              @relation(fields: [goodsReceiptId, organizationId], references: [id, organizationId], onDelete: Restrict)
   id                    String                     @id @default(uuid()) @db.Uuid
   organizationId        String                     @db.Uuid
   type                  InventoryTransactionType
@@ -371,6 +384,7 @@ model InventoryTransaction {
   entries               InventoryLedgerEntry[]
 
   @@unique([salesOrderId, organizationId])
+  @@unique([goodsReceiptId, organizationId])
   @@unique([id, organizationId])
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, createdAt, id])
@@ -530,4 +544,148 @@ model SalesPayment {
 
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, salesOrderId, createdAt, id])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model Supplier {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  name           String          @db.VarChar(200)
+  contactName    String?         @db.VarChar(200)
+  email          String?         @db.VarChar(254)
+  phone          String?         @db.VarChar(50)
+  taxId          String?         @db.VarChar(100)
+  address        String?         @db.VarChar(1000)
+  notes          String?         @db.VarChar(2000)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, createdAt, id])
+  @@index([organizationId, isActive, createdAt, id])
+}
+
+model PurchaseSequence {
+  organizationId String       @id @db.Uuid
+  lastNumber     Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model GoodsReceiptSequence {
+  organizationId String       @id @db.Uuid
+  lastNumber     Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model PurchaseOrder {
+  id                     String              @id @default(uuid()) @db.Uuid
+  organizationId         String              @db.Uuid
+  sequenceNumber         Int
+  supplierId             String              @db.Uuid
+  destinationLocationId  String              @db.Uuid
+  status                 PurchaseOrderStatus @default(DRAFT)
+  currencyCode           String              @db.Char(3)
+  note                   String?             @db.VarChar(2000)
+  subtotal               Decimal             @default(0) @db.Decimal(19, 4)
+  total                  Decimal             @default(0) @db.Decimal(19, 4)
+  createdByUserId        String              @db.Uuid
+  createdAt              DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime            @updatedAt @db.Timestamptz(3)
+  orderedAt              DateTime?           @db.Timestamptz(3)
+  completedAt            DateTime?           @db.Timestamptz(3)
+  cancelledAt            DateTime?           @db.Timestamptz(3)
+  creationIdempotencyKey String              @db.Uuid
+  creationRequestHash    String              @db.Char(64)
+  orderingIdempotencyKey String?             @db.Uuid
+  orderingRequestHash    String?             @db.Char(64)
+  organization           Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  supplier               Supplier            @relation(fields: [supplierId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  destinationLocation    Location            @relation(fields: [destinationLocationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdBy              User                @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items                  PurchaseOrderItem[]
+  receipts               GoodsReceipt[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sequenceNumber])
+  @@unique([organizationId, creationIdempotencyKey])
+  @@unique([organizationId, orderingIdempotencyKey])
+  @@index([organizationId, createdAt, id])
+  @@index([organizationId, status, createdAt, id])
+  @@index([organizationId, supplierId])
+  @@index([organizationId, destinationLocationId])
+}
+
+model PurchaseOrderItem {
+  id                  String             @id @default(uuid()) @db.Uuid
+  organizationId      String             @db.Uuid
+  purchaseOrderId     String             @db.Uuid
+  variantId           String             @db.Uuid
+  orderedQuantity     Decimal            @db.Decimal(19, 6)
+  unitCost            Decimal            @db.Decimal(19, 4)
+  lineTotal           Decimal            @db.Decimal(19, 4)
+  snapshotItemName    String             @db.VarChar(200)
+  snapshotVariantName String?            @db.VarChar(120)
+  snapshotSku         String?            @db.VarChar(80)
+  snapshotUnit        UnitOfMeasure
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  order               PurchaseOrder      @relation(fields: [purchaseOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant             CatalogVariant     @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  receiptItems        GoodsReceiptItem[]
+
+  @@unique([id, organizationId])
+  @@unique([purchaseOrderId, variantId])
+  @@index([organizationId, purchaseOrderId])
+  @@index([organizationId, variantId])
+}
+
+model GoodsReceipt {
+  id                   String                @id @default(uuid()) @db.Uuid
+  organizationId       String                @db.Uuid
+  purchaseOrderId      String                @db.Uuid
+  sequenceNumber       Int
+  createdByUserId      String                @db.Uuid
+  note                 String?               @db.VarChar(2000)
+  idempotencyKey       String                @db.Uuid
+  requestHash          String                @db.Char(64)
+  receivedAt           DateTime              @default(now()) @db.Timestamptz(3)
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  order                PurchaseOrder         @relation(fields: [purchaseOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdBy            User                  @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items                GoodsReceiptItem[]
+  inventoryTransaction InventoryTransaction?
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sequenceNumber])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, purchaseOrderId])
+  @@index([organizationId, receivedAt, id])
+}
+
+model GoodsReceiptItem {
+  id                  String            @id @default(uuid()) @db.Uuid
+  organizationId      String            @db.Uuid
+  goodsReceiptId      String            @db.Uuid
+  purchaseOrderItemId String            @db.Uuid
+  variantId           String            @db.Uuid
+  receivedQuantity    Decimal           @db.Decimal(19, 6)
+  snapshotUnit        UnitOfMeasure
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  receipt             GoodsReceipt      @relation(fields: [goodsReceiptId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  purchaseOrderItem   PurchaseOrderItem @relation(fields: [purchaseOrderItemId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant             CatalogVariant    @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([goodsReceiptId, purchaseOrderItemId])
+  @@index([organizationId, goodsReceiptId])
+  @@index([organizationId, purchaseOrderItemId])
 }

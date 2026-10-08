@@ -6,6 +6,7 @@ export const INVENTORY_TYPES = [
   'TRANSFER',
   'REVERSAL',
   'SALE',
+  'PURCHASE_RECEIPT',
 ] as const;
 export type InventoryTransactionType = (typeof INVENTORY_TYPES)[number];
 export const ADJUSTMENT_DIRECTIONS = ['INCREASE', 'DECREASE'] as const;
@@ -44,6 +45,7 @@ export interface InventoryLedgerEntryResponse {
 }
 export interface InventoryTransactionResponse {
   salesOrderId: string | null;
+  goodsReceiptId: string | null;
   id: string;
   type: InventoryTransactionType;
   reason: AdjustmentReason | null;

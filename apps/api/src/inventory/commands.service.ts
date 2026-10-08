@@ -122,7 +122,11 @@ export class InventoryCommandsService {
     const permission =
       original.type === 'TRANSFER' ? Permission.INVENTORY_TRANSFER : Permission.INVENTORY_ADJUST;
     if (!context.permissions.includes(permission)) throw new ForbiddenException();
-    if (original.type === 'REVERSAL' || original.type === 'SALE')
+    if (
+      original.type === 'REVERSAL' ||
+      original.type === 'SALE' ||
+      original.type === 'PURCHASE_RECEIPT'
+    )
       inventoryConflict('INVENTORY_REVERSAL_NOT_ALLOWED');
     return this.execute(
       org,
@@ -208,6 +212,7 @@ export class InventoryCommandsService {
     entries: Entry[],
     reversesTransactionId?: string,
     salesOrderId?: string,
+    goodsReceiptId?: string,
   ) {
     const settings = await tx.inventorySettings.findUniqueOrThrow({
       where: { organizationId: org },
@@ -229,7 +234,8 @@ export class InventoryCommandsService {
       });
       const next = (balance?.quantity ?? new Prisma.Decimal(0)).plus(entry.delta);
       if (next.abs().gt(maximum)) inventoryConflict('INVENTORY_QUANTITY_OVERFLOW');
-      if (!settings.allowNegativeStock && next.lt(0)) inventoryConflict('INSUFFICIENT_STOCK');
+      if (type !== 'PURCHASE_RECEIPT' && !settings.allowNegativeStock && next.lt(0))
+        inventoryConflict('INSUFFICIENT_STOCK');
       balances.push({ ...entry, quantity: next });
     }
     const transaction = await tx.inventoryTransaction.create({
@@ -243,6 +249,7 @@ export class InventoryCommandsService {
         reason,
         reversesTransactionId,
         salesOrderId,
+        goodsReceiptId,
       },
     });
     for (const entry of balances) {
@@ -287,6 +294,33 @@ export class InventoryCommandsService {
       entries,
       undefined,
       salesOrderId,
+    );
+  }
+  async recordPurchaseReceipt(
+    tx: InventoryTx,
+    org: string,
+    actor: string,
+    goodsReceiptId: string,
+    entries: Entry[],
+  ) {
+    if (!entries.length) return;
+    for (const key of [
+      ...new Set(entries.map((e) => stockKey(org, e.locationId, e.variantId))),
+    ].sort())
+      await inventoryLock(tx, key);
+    return this.record(
+      tx,
+      org,
+      actor,
+      randomUUID(),
+      'PURCHASE_RECEIPT',
+      null,
+      null,
+      hash(['PURCHASE_RECEIPT', goodsReceiptId]),
+      entries,
+      undefined,
+      undefined,
+      goodsReceiptId,
     );
   }
   private async resources(tx: InventoryTx, org: string, entries: Entry[]) {
