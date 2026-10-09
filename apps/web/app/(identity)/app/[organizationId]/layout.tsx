@@ -45,6 +45,12 @@ export default async function OrganizationLayout({
         {permissions.includes(Permission.SUPPLIERS_VIEW) && (
           <Link href={`/app/${organizationId}/suppliers`}>Suppliers</Link>
         )}
+        {permissions.includes(Permission.EXPENSES_VIEW) && (
+          <Link href={`/app/${organizationId}/expenses`}>Expenses</Link>
+        )}
+        {permissions.includes(Permission.FINANCE_VIEW) && (
+          <Link href={`/app/${organizationId}/finance`}>Finance</Link>
+        )}
         {permissions.includes(Permission.CATALOG_VIEW) && (
           <Link href={`/app/${organizationId}/catalog`}>Catalog</Link>
         )}

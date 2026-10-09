@@ -76,6 +76,15 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       INVENTORY_RESOURCE_INACTIVE: 'The item, variant and locations must all be active.',
       INVENTORY_QUANTITY_OVERFLOW: 'The resulting stock exceeds the supported quantity range.',
       INVENTORY_NEGATIVE_STOCK_EXISTS: 'Resolve negative balances before disabling negative stock.',
+      EXPENSE_CATEGORY_ALREADY_EXISTS: 'An expense category with this name already exists.',
+      EXPENSE_CATEGORY_INACTIVE: 'Choose an active expense category.',
+      EXPENSE_LOCATION_INACTIVE: 'Choose an active location for this expense.',
+      EXPENSE_NOT_EDITABLE: 'Only draft expenses can be edited.',
+      EXPENSE_NOT_POSTABLE: 'This expense cannot be posted. Review its details.',
+      EXPENSE_ALREADY_POSTED: 'This expense has already been posted.',
+      EXPENSE_NOT_VOIDABLE: 'Only posted expenses can be voided.',
+      FINANCE_MIXED_CURRENCY:
+        'This period contains multiple currencies. Currency conversion is not available yet.',
     };
     if (response.status === 409) {
       const body: unknown = await response.json().catch(() => null);

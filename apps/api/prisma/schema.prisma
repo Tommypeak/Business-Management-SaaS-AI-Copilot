@@ -73,18 +73,23 @@ model Organization {
   purchaseSequence      PurchaseSequence?
   goodsReceiptSequence  GoodsReceiptSequence?
   goodsReceipts         GoodsReceipt[]
+  expenseCategories     ExpenseCategory[]
+  expenses              Expense[]
+  expenseSequence       ExpenseSequence?
 }
 
 model OrganizationMembership {
-  id             String           @id @default(uuid()) @db.Uuid
-  organizationId String           @db.Uuid
-  userId         String           @db.Uuid
-  status         MembershipStatus @default(ACTIVE)
-  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
-  roles          MembershipRole[]
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  userId          String           @db.Uuid
+  status          MembershipStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles           MembershipRole[]
+  createdExpenses Expense[]        @relation("ExpenseCreatedByMembership")
+  voidedExpenses  Expense[]        @relation("ExpenseVoidedByMembership")
 
   @@unique([organizationId, userId])
   @@unique([id, organizationId])
@@ -142,6 +147,7 @@ model Location {
   organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inventoryBalances InventoryBalance[]
   inventoryEntries  InventoryLedgerEntry[]
+  expenses          Expense[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt, id])
@@ -688,4 +694,79 @@ model GoodsReceiptItem {
   @@unique([goodsReceiptId, purchaseOrderItemId])
   @@index([organizationId, goodsReceiptId])
   @@index([organizationId, purchaseOrderItemId])
+}
+
+enum ExpenseStatus {
+  DRAFT
+  POSTED
+  VOIDED
+}
+
+model ExpenseCategory {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String       @db.VarChar(120)
+  normalizedName String       @db.VarChar(120)
+  description    String?      @db.VarChar(500)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  expenses       Expense[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, normalizedName])
+  @@index([organizationId, createdAt, id])
+  @@index([organizationId, isActive, createdAt, id])
+}
+
+model ExpenseSequence {
+  organizationId String       @id @db.Uuid
+  lastNumber     Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model Expense {
+  id                     String                  @id @default(uuid()) @db.Uuid
+  organizationId         String                  @db.Uuid
+  sequenceNumber         Int
+  status                 ExpenseStatus           @default(DRAFT)
+  categoryId             String                  @db.Uuid
+  locationId             String?                 @db.Uuid
+  expenseDate            DateTime                @db.Date
+  payeeName              String?                 @db.VarChar(200)
+  description            String?                 @db.VarChar(2000)
+  note                   String?                 @db.VarChar(2000)
+  amount                 Decimal                 @db.Decimal(19, 4)
+  currencyCode           String                  @db.Char(3)
+  paymentMethod          PaymentMethod
+  createdByUserId        String                  @db.Uuid
+  createdAt              DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                @updatedAt @db.Timestamptz(3)
+  postedAt               DateTime?               @db.Timestamptz(3)
+  voidedAt               DateTime?               @db.Timestamptz(3)
+  voidedByUserId         String?                 @db.Uuid
+  voidReason             String?                 @db.VarChar(1000)
+  creationIdempotencyKey String                  @db.Uuid
+  creationRequestHash    String                  @db.Char(64)
+  postingIdempotencyKey  String?                 @db.Uuid
+  postingRequestHash     String?                 @db.Char(64)
+  voidIdempotencyKey     String?                 @db.Uuid
+  voidRequestHash        String?                 @db.Char(64)
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  category               ExpenseCategory         @relation(fields: [categoryId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  location               Location?               @relation(fields: [locationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdByMembership    OrganizationMembership  @relation("ExpenseCreatedByMembership", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  voidedByMembership     OrganizationMembership? @relation("ExpenseVoidedByMembership", fields: [organizationId, voidedByUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sequenceNumber])
+  @@unique([organizationId, creationIdempotencyKey])
+  @@unique([organizationId, postingIdempotencyKey])
+  @@unique([organizationId, voidIdempotencyKey])
+  @@index([organizationId, expenseDate(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])
+  @@index([organizationId, status, expenseDate(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])
+  @@index([organizationId, categoryId, expenseDate])
+  @@index([organizationId, locationId, expenseDate])
+  @@index([organizationId, paymentMethod, expenseDate])
 }
