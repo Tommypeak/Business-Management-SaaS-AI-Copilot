@@ -48,8 +48,11 @@ export interface FinanceSummaryResponse {
   salesAmount: string;
   paymentsCollected: string;
   expensesPaid: string;
+  supplierPaymentsPaid: string | null;
+  supplierPaymentsLocationScoped: boolean;
   netCashFlow: string;
   outstandingReceivablesCurrent: string;
+  outstandingPayablesCurrent: string | null;
 }
 
 export interface ExpenseCategoryBreakdownResponse {

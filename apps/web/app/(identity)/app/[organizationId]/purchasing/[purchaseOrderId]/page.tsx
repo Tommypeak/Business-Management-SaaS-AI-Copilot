@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Permission } from '@saas/types';
 import { api } from '../../../../../../lib/api';
 import { purchasingApi } from '../../../../../../lib/purchasing';
+import { accountsPayableApi } from '../../../../../../lib/accounts-payable';
 import {
   CancelPurchaseForm,
   OrderPurchaseForm,
@@ -26,6 +27,12 @@ export default async function PurchaseOrderPage({
     draft && manage && permissions.includes(Permission.LOCATIONS_VIEW)
       ? await api.locations(org)
       : [];
+  const linkedBills = permissions.includes(Permission.ACCOUNTS_PAYABLE_VIEW)
+    ? await accountsPayableApi.bills(
+        org,
+        `purchaseOrderId=${encodeURIComponent(purchaseOrderId)}&limit=100`,
+      )
+    : null;
   return (
     <div className="space-y-5">
       <Link className="underline" href={`/app/${org}/purchasing`}>
@@ -54,6 +61,39 @@ export default async function PurchaseOrderPage({
         {order.completedAt && <p>Received: {order.completedAt}</p>}
         {order.cancelledAt && <p>Cancelled: {order.cancelledAt}</p>}
       </div>
+      {permissions.includes(Permission.ACCOUNTS_PAYABLE_MANAGE) && (
+        <Link
+          className="underline"
+          href={`/app/${org}/accounts-payable/new?purchaseOrderId=${purchaseOrderId}`}
+        >
+          Create Bill from this Purchase Order
+        </Link>
+      )}
+      {linkedBills && (
+        <div className="panel space-y-2">
+          <h3 className="font-semibold">Linked Supplier Bills</h3>
+          {linkedBills.items.length ? (
+            linkedBills.items.map((bill) => (
+              <p key={bill.id}>
+                <Link className="underline" href={`/app/${org}/accounts-payable/${bill.id}`}>
+                  {bill.number}
+                </Link>{' '}
+                · {bill.status} · Outstanding {bill.outstandingAmount} {bill.currencyCode}
+              </p>
+            ))
+          ) : (
+            <p>No linked bills.</p>
+          )}
+          {linkedBills.nextCursor && (
+            <Link
+              className="underline"
+              href={`/app/${org}/accounts-payable?purchaseOrderId=${purchaseOrderId}`}
+            >
+              View all linked bills
+            </Link>
+          )}
+        </div>
+      )}
       {draft && manage && (
         <>
           <h3 className="font-semibold">Draft details</h3>

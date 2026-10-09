@@ -108,12 +108,34 @@ export class FinanceService {
           ${location(Prisma.sql`so."locationId"`, query.locationId)}
           GROUP BY so."currencyCode"
         `);
+        const supplierPayments = query.locationId
+          ? []
+          : await tx.$queryRaw<MoneyRow[]>(Prisma.sql`
+              SELECT b."currencyCode", SUM(p.amount) AS amount
+              FROM ${schema}."SupplierPayment" p JOIN ${schema}."SupplierBill" b
+                ON b.id = p."supplierBillId" AND b."organizationId" = p."organizationId"
+              WHERE p."organizationId" = ${org}::uuid
+              ${dateRange(Prisma.sql`p."paymentDate"`, query)}
+              GROUP BY b."currencyCode"
+            `);
+        const payables = query.locationId
+          ? []
+          : await tx.$queryRaw<MoneyRow[]>(Prisma.sql`
+              SELECT b."currencyCode", SUM(GREATEST(b.amount - COALESCE(p.paid, 0), 0)) AS amount
+              FROM ${schema}."SupplierBill" b LEFT JOIN (
+                SELECT "supplierBillId", SUM(amount) AS paid FROM ${schema}."SupplierPayment"
+                WHERE "organizationId" = ${org}::uuid GROUP BY "supplierBillId"
+              ) p ON p."supplierBillId" = b.id
+              WHERE b."organizationId" = ${org}::uuid AND b.status = 'POSTED'
+              GROUP BY b."currencyCode"
+            `);
         const currencyCode = singleCurrency(
-          [...sales, ...payments, ...expenses, ...outstanding],
+          [...sales, ...payments, ...expenses, ...outstanding, ...supplierPayments, ...payables],
           organization.defaultCurrency,
         );
         const collected = sum(payments),
-          paid = sum(expenses);
+          paid = sum(expenses),
+          supplierPaid = sum(supplierPayments);
         return {
           currencyCode,
           timezone: organization.timezone,
@@ -122,8 +144,11 @@ export class FinanceService {
           salesAmount: sum(sales).toFixed(4),
           paymentsCollected: collected.toFixed(4),
           expensesPaid: paid.toFixed(4),
-          netCashFlow: collected.minus(paid).toFixed(4),
+          supplierPaymentsPaid: query.locationId ? null : supplierPaid.toFixed(4),
+          supplierPaymentsLocationScoped: !query.locationId,
+          netCashFlow: collected.minus(paid).minus(supplierPaid).toFixed(4),
           outstandingReceivablesCurrent: sum(outstanding).toFixed(4),
+          outstandingPayablesCurrent: query.locationId ? null : sum(payables).toFixed(4),
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },

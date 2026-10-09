@@ -34,7 +34,7 @@ export function validBusinessDate(value: unknown): value is string {
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
-const IsBusinessDate = () =>
+export const IsBusinessDate = () =>
   ValidateBy({
     name: 'isBusinessDate',
     validator: {

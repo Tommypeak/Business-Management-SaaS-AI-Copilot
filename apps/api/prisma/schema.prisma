@@ -76,20 +76,25 @@ model Organization {
   expenseCategories     ExpenseCategory[]
   expenses              Expense[]
   expenseSequence       ExpenseSequence?
+  supplierBills         SupplierBill[]
+  supplierBillSequence  SupplierBillSequence?
 }
 
 model OrganizationMembership {
-  id              String           @id @default(uuid()) @db.Uuid
-  organizationId  String           @db.Uuid
-  userId          String           @db.Uuid
-  status          MembershipStatus @default(ACTIVE)
-  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
-  roles           MembershipRole[]
-  createdExpenses Expense[]        @relation("ExpenseCreatedByMembership")
-  voidedExpenses  Expense[]        @relation("ExpenseVoidedByMembership")
+  id                      String            @id @default(uuid()) @db.Uuid
+  organizationId          String            @db.Uuid
+  userId                  String            @db.Uuid
+  status                  MembershipStatus  @default(ACTIVE)
+  createdAt               DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime          @updatedAt @db.Timestamptz(3)
+  organization            Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roles                   MembershipRole[]
+  createdExpenses         Expense[]         @relation("ExpenseCreatedByMembership")
+  voidedExpenses          Expense[]         @relation("ExpenseVoidedByMembership")
+  createdSupplierBills    SupplierBill[]    @relation("SupplierBillCreatedByMembership")
+  voidedSupplierBills     SupplierBill[]    @relation("SupplierBillVoidedByMembership")
+  createdSupplierPayments SupplierPayment[] @relation("SupplierPaymentCreatedByMembership")
 
   @@unique([organizationId, userId])
   @@unique([id, organizationId])
@@ -575,6 +580,7 @@ model Supplier {
   updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   purchaseOrders PurchaseOrder[]
+  bills          SupplierBill[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt, id])
@@ -620,8 +626,10 @@ model PurchaseOrder {
   createdBy              User                @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
   items                  PurchaseOrderItem[]
   receipts               GoodsReceipt[]
+  bills                  SupplierBill[]
 
   @@unique([id, organizationId])
+  @@unique([id, organizationId, supplierId])
   @@unique([organizationId, sequenceNumber])
   @@unique([organizationId, creationIdempotencyKey])
   @@unique([organizationId, orderingIdempotencyKey])
@@ -769,4 +777,85 @@ model Expense {
   @@index([organizationId, categoryId, expenseDate])
   @@index([organizationId, locationId, expenseDate])
   @@index([organizationId, paymentMethod, expenseDate])
+}
+
+enum SupplierBillStatus {
+  DRAFT
+  POSTED
+  VOIDED
+}
+
+model SupplierBillSequence {
+  organizationId String       @id @db.Uuid
+  lastNumber     Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model SupplierBill {
+  id                      String                  @id @default(uuid()) @db.Uuid
+  organizationId          String                  @db.Uuid
+  sequenceNumber          Int
+  supplierId              String                  @db.Uuid
+  purchaseOrderId         String?                 @db.Uuid
+  status                  SupplierBillStatus      @default(DRAFT)
+  supplierInvoiceNumber   String?                 @db.VarChar(120)
+  normalizedInvoiceNumber String?                 @db.VarChar(120)
+  issueDate               DateTime                @db.Date
+  dueDate                 DateTime?               @db.Date
+  currencyCode            String                  @db.Char(3)
+  amount                  Decimal                 @db.Decimal(19, 4)
+  description             String?                 @db.VarChar(2000)
+  note                    String?                 @db.VarChar(2000)
+  createdByUserId         String                  @db.Uuid
+  createdAt               DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                @updatedAt @db.Timestamptz(3)
+  postedAt                DateTime?               @db.Timestamptz(3)
+  voidedAt                DateTime?               @db.Timestamptz(3)
+  voidedByUserId          String?                 @db.Uuid
+  voidReason              String?                 @db.VarChar(1000)
+  creationIdempotencyKey  String                  @db.Uuid
+  creationRequestHash     String                  @db.Char(64)
+  postingIdempotencyKey   String?                 @db.Uuid
+  postingRequestHash      String?                 @db.Char(64)
+  voidIdempotencyKey      String?                 @db.Uuid
+  voidRequestHash         String?                 @db.Char(64)
+  organization            Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  supplier                Supplier                @relation(fields: [supplierId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  purchaseOrder           PurchaseOrder?          @relation(fields: [purchaseOrderId, organizationId, supplierId], references: [id, organizationId, supplierId], onDelete: Restrict)
+  createdByMembership     OrganizationMembership  @relation("SupplierBillCreatedByMembership", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  voidedByMembership      OrganizationMembership? @relation("SupplierBillVoidedByMembership", fields: [organizationId, voidedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  payments                SupplierPayment[]
+
+  @@unique([id, organizationId])
+  @@unique([organizationId, sequenceNumber])
+  @@unique([organizationId, creationIdempotencyKey])
+  @@unique([organizationId, postingIdempotencyKey])
+  @@unique([organizationId, voidIdempotencyKey])
+  @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([organizationId, status, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([organizationId, supplierId, createdAt(sort: Desc)])
+  @@index([organizationId, purchaseOrderId])
+  @@index([organizationId, dueDate])
+  @@index([organizationId, issueDate])
+}
+
+model SupplierPayment {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  organizationId      String                 @db.Uuid
+  supplierBillId      String                 @db.Uuid
+  amount              Decimal                @db.Decimal(19, 4)
+  method              PaymentMethod
+  reference           String?                @db.VarChar(200)
+  note                String?                @db.VarChar(2000)
+  paymentDate         DateTime               @db.Date
+  createdByUserId     String                 @db.Uuid
+  createdAt           DateTime               @default(now()) @db.Timestamptz(3)
+  idempotencyKey      String                 @db.Uuid
+  requestHash         String                 @db.Char(64)
+  bill                SupplierBill           @relation(fields: [supplierBillId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdByMembership OrganizationMembership @relation("SupplierPaymentCreatedByMembership", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, supplierBillId, createdAt, id])
+  @@index([organizationId, paymentDate])
 }

@@ -39,6 +39,11 @@ export default async function SupplierPage({
         <p className="whitespace-pre-wrap">{supplier.address}</p>
         <p className="whitespace-pre-wrap">{supplier.notes}</p>
       </div>
+      {permissions.includes(Permission.ACCOUNTS_PAYABLE_VIEW) && (
+        <Link className="underline" href={`/app/${org}/accounts-payable?supplierId=${supplierId}`}>
+          View Supplier Bills and outstanding payables
+        </Link>
+      )}
       {permissions.includes(Permission.SUPPLIERS_MANAGE) && (
         <SupplierForm org={org} supplier={supplier} />
       )}

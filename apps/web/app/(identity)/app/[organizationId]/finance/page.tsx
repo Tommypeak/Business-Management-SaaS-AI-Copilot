@@ -24,10 +24,12 @@ export default async function FinancePage({
   ]);
   const cards = [
     ['Completed Sales', summary.salesAmount],
-    ['Payments Collected', summary.paymentsCollected],
-    ['Recorded Expenses', summary.expensesPaid],
+    ['Customer Payments Collected', summary.paymentsCollected],
+    ['Operating Expenses', summary.expensesPaid],
+    ['Supplier Payments', summary.supplierPaymentsPaid],
     ['Net Cash Flow', summary.netCashFlow],
     ['Outstanding Receivables', summary.outstandingReceivablesCurrent],
+    ['Outstanding Payables', summary.outstandingPayablesCurrent],
   ];
   return (
     <div className="space-y-5">
@@ -63,7 +65,7 @@ export default async function FinancePage({
           <div className="panel" key={label}>
             <p>{label}</p>
             <p className="text-xl font-semibold">
-              {amount} {summary.currencyCode}
+              {amount === null ? 'Not allocated by location' : `${amount} ${summary.currencyCode}`}
             </p>
           </div>
         ))}
@@ -71,10 +73,18 @@ export default async function FinancePage({
       <div className="panel space-y-2">
         <h3 className="font-semibold">How to read this</h3>
         <p>
-          Net Cash Flow is customer payments collected minus posted operating expenses. It is not
-          accounting profit: inventory valuation, COGS, taxes and unpaid supplier obligations are
-          not included. Purchase orders and goods receipts do not count as cash expenses.
+          Net Cash Flow is customer payments collected minus posted operating expenses and supplier
+          payments actually made. It is not accounting profit and does not include inventory
+          valuation, COGS, taxes or other accounting adjustments. Purchase orders, goods receipts
+          and unpaid bills do not change cash flow.
         </p>
+        {!summary.supplierPaymentsLocationScoped && (
+          <p>
+            Supplier bills have no Location in this stage. Supplier payments and outstanding
+            payables are not allocated to the selected Location and are excluded from its cash
+            result.
+          </p>
+        )}
       </div>
       <h3 className="font-semibold">Expenses by category</h3>
       <table className="catalog-table">

@@ -29,6 +29,7 @@ import { registerInventoryTests } from './inventory.scenarios.js';
 import { registerSalesTests } from './sales.scenarios.js';
 import { registerPurchasingTests } from './purchasing.scenarios.js';
 import { registerExpensesFinanceTests } from './expenses-finance.scenarios.js';
+import { registerAccountsPayableTests } from './accounts-payable.scenarios.js';
 
 const envPath = resolve('../../.env');
 if (existsSync(envPath)) process.loadEnvFile(envPath);
@@ -581,3 +582,4 @@ registerInventoryTests(() => ({ app, prisma, admin, schema, token, legacyOrganiz
 registerSalesTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
 registerPurchasingTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
 registerExpensesFinanceTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
+registerAccountsPayableTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));

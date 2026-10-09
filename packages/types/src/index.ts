@@ -18,6 +18,9 @@ export type LocationType = (typeof LOCATION_TYPES)[number];
 
 /** Public permission names only. Authorization is always evaluated by the API. */
 export const Permission = {
+  ACCOUNTS_PAYABLE_VIEW: 'accountsPayable.view',
+  ACCOUNTS_PAYABLE_MANAGE: 'accountsPayable.manage',
+  ACCOUNTS_PAYABLE_PAYMENTS_MANAGE: 'accountsPayable.payments.manage',
   EXPENSES_VIEW: 'expenses.view',
   EXPENSES_MANAGE: 'expenses.manage',
   FINANCE_VIEW: 'finance.view',
@@ -108,3 +111,4 @@ export * from './catalog.js';
 export * from './sales.js';
 export * from './purchasing.js';
 export * from './expenses.js';
+export * from './accounts-payable.js';

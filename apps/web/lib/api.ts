@@ -85,6 +85,18 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
       EXPENSE_NOT_VOIDABLE: 'Only posted expenses can be voided.',
       FINANCE_MIXED_CURRENCY:
         'This period contains multiple currencies. Currency conversion is not available yet.',
+      AP_MIXED_CURRENCY: 'Payables use multiple currencies. Currency conversion is not available.',
+      BILL_NOT_EDITABLE: 'Only draft bills can be edited.',
+      BILL_ALREADY_POSTED: 'This bill has already been posted.',
+      BILL_NOT_POSTABLE: 'Review the bill details before posting.',
+      BILL_NOT_VOIDABLE: 'Only posted bills without payments can be voided.',
+      BILL_HAS_PAYMENTS: 'This bill has payments and cannot be voided.',
+      BILL_NOT_PAYABLE: 'Only posted bills can receive payments.',
+      BILL_PURCHASE_ORDER_SUPPLIER_MISMATCH: 'The purchase order belongs to another supplier.',
+      BILL_PURCHASE_ORDER_NOT_ELIGIBLE: 'The purchase order must be ordered before bill posting.',
+      BILL_CURRENCY_MISMATCH: 'The bill currency must match the purchase order currency.',
+      BILL_INVOICE_ALREADY_EXISTS: 'This supplier invoice number is already posted.',
+      SUPPLIER_PAYMENT_EXCEEDS_OUTSTANDING: 'Payment exceeds the bill outstanding amount.',
     };
     if (response.status === 409) {
       const body: unknown = await response.json().catch(() => null);
