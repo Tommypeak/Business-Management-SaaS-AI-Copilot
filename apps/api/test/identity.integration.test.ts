@@ -27,6 +27,7 @@ import { validateEnvironment } from '../src/config/environment.js';
 import { registerCatalogTests } from './catalog.scenarios.js';
 import { registerInventoryTests } from './inventory.scenarios.js';
 import { registerSalesTests } from './sales.scenarios.js';
+import { registerAnalyticsTests } from './analytics.scenarios.js';
 import { registerPurchasingTests } from './purchasing.scenarios.js';
 import { registerExpensesFinanceTests } from './expenses-finance.scenarios.js';
 import { registerAccountsPayableTests } from './accounts-payable.scenarios.js';
@@ -583,3 +584,4 @@ registerSalesTests(() => ({ app, prisma, admin, schema, token, legacyOrganizatio
 registerPurchasingTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
 registerExpensesFinanceTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
 registerAccountsPayableTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
+registerAnalyticsTests(() => ({ app, prisma, token, legacyOrganizationId }));

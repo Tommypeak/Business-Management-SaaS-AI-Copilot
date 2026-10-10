@@ -8,5 +8,6 @@ import { FinanceService } from './finance.service.js';
   imports: [PrismaModule, AuthorizationModule],
   controllers: [FinanceController],
   providers: [FinanceService],
+  exports: [FinanceService],
 })
 export class FinanceModule {}

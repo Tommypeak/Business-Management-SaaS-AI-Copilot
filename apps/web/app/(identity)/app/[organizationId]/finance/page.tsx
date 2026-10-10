@@ -1,3 +1,4 @@
+import { AnalyticsScreen } from '../../../../../components/analytics/screen';
 import { Permission } from '@saas/types';
 import { api } from '../../../../../lib/api';
 import { expensesApi } from '../../../../../lib/expenses';
@@ -15,6 +16,8 @@ export default async function FinancePage({
   const permissions = organization.currentMembership.permissions;
   if (!permissions.includes(Permission.FINANCE_VIEW))
     return <p>You do not have permission to view Finance.</p>;
+  if (permissions.includes(Permission.ANALYTICS_VIEW))
+    return <AnalyticsScreen org={org} mode="finance" search={await searchParams} />;
   const query = selectedQuery(await searchParams, ['from', 'to', 'locationId']);
   query.delete('limit');
   const [summary, breakdown, locations] = await Promise.all([

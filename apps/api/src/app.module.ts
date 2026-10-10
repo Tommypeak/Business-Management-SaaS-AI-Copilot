@@ -11,6 +11,7 @@ import { PurchasingModule } from './purchasing/purchasing.module.js';
 import { ExpensesModule } from './expenses/expenses.module.js';
 import { FinanceModule } from './finance/finance.module.js';
 import { AccountsPayableModule } from './accounts-payable/accounts-payable.module.js';
+import { AnalyticsModule } from './analytics/analytics.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AccountsPayableModule } from './accounts-payable/accounts-payable.modul
     ExpensesModule,
     FinanceModule,
     AccountsPayableModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

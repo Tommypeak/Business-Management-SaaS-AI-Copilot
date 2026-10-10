@@ -1,19 +1,27 @@
 import Link from 'next/link';
 import { UserButton } from '@clerk/nextjs';
 import { auth } from '@clerk/nextjs/server';
+import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
-
+import { ThemeToggle } from '../../../components/organization-navigation';
 export default async function ApplicationLayout({ children }: { children: ReactNode }) {
   await auth.protect();
+  const theme = (await cookies()).get('workspace-theme')?.value === 'dark' ? 'dark' : 'light';
   return (
-    <main className="mx-auto max-w-5xl space-y-8 px-6 py-10">
-      <header className="flex items-center justify-between border-b border-slate-200 pb-5">
+    <div className="application-root" data-theme={theme}>
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
+      <header className="application-header">
         <Link href="/app" className="font-semibold">
-          Business Management
+          Business workspace
         </Link>
-        <UserButton />
+        <div className="header-actions">
+          <ThemeToggle initial={theme} />
+          <UserButton />
+        </div>
       </header>
       {children}
-    </main>
+    </div>
   );
 }

@@ -1,8 +1,6 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Permission } from '@saas/types';
 import { api } from '../../../../lib/api';
-
+import { OrganizationNavigation } from '../../../../components/organization-navigation';
 export default async function OrganizationLayout({
   children,
   params,
@@ -15,59 +13,16 @@ export default async function OrganizationLayout({
     api.organization(organizationId),
     api.organizations(),
   ]);
-  const permissions = organization.currentMembership.permissions;
   return (
-    <div className="space-y-6">
-      <nav aria-label="Organization switcher" className="flex flex-wrap items-center gap-3">
-        <span className="font-medium">Organization:</span>
-        {organizations.map((item) => (
-          <Link
-            key={item.id}
-            href={`/app/${item.id}`}
-            aria-current={item.id === organizationId ? 'page' : undefined}
-            className={item.id === organizationId ? 'font-semibold underline' : 'underline'}
-          >
-            {item.name}
-          </Link>
-        ))}
-      </nav>
-      <nav aria-label="Organization pages" className="flex gap-4">
-        <Link href={`/app/${organizationId}`}>Overview</Link>
-        {permissions.includes(Permission.SALES_VIEW) && (
-          <Link href={`/app/${organizationId}/sales`}>Sales</Link>
-        )}
-        {permissions.includes(Permission.CUSTOMERS_VIEW) && (
-          <Link href={`/app/${organizationId}/customers`}>Customers</Link>
-        )}
-        {permissions.includes(Permission.PURCHASING_VIEW) && (
-          <Link href={`/app/${organizationId}/purchasing`}>Purchasing</Link>
-        )}
-        {permissions.includes(Permission.SUPPLIERS_VIEW) && (
-          <Link href={`/app/${organizationId}/suppliers`}>Suppliers</Link>
-        )}
-        {permissions.includes(Permission.EXPENSES_VIEW) && (
-          <Link href={`/app/${organizationId}/expenses`}>Expenses</Link>
-        )}
-        {permissions.includes(Permission.ACCOUNTS_PAYABLE_VIEW) && (
-          <Link href={`/app/${organizationId}/accounts-payable`}>Accounts Payable</Link>
-        )}
-        {permissions.includes(Permission.FINANCE_VIEW) && (
-          <Link href={`/app/${organizationId}/finance`}>Finance</Link>
-        )}
-        {permissions.includes(Permission.CATALOG_VIEW) && (
-          <Link href={`/app/${organizationId}/catalog`}>Catalog</Link>
-        )}
-        {permissions.includes(Permission.INVENTORY_VIEW) && (
-          <Link href={`/app/${organizationId}/inventory`}>Inventory</Link>
-        )}
-        {permissions.includes(Permission.ORGANIZATION_UPDATE) && (
-          <Link href={`/app/${organizationId}/settings`}>Settings</Link>
-        )}
-        {permissions.includes(Permission.LOCATIONS_VIEW) && (
-          <Link href={`/app/${organizationId}/locations`}>Locations</Link>
-        )}
-      </nav>
-      {children}
+    <div className="organization-shell">
+      <OrganizationNavigation
+        org={organizationId}
+        organizations={organizations}
+        permissions={organization.currentMembership.permissions}
+      />
+      <main className="organization-content" id="main-content">
+        {children}
+      </main>
     </div>
   );
 }

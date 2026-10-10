@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { Permission } from '@saas/types';
 import { api } from '../../../../lib/api';
 
 export default async function OrganizationPage({
@@ -7,6 +9,8 @@ export default async function OrganizationPage({
 }) {
   const { organizationId } = await params;
   const organization = await api.organization(organizationId);
+  if (organization.currentMembership.permissions.includes(Permission.ANALYTICS_VIEW))
+    redirect(`/app/${organizationId}/dashboard`);
   return (
     <section className="panel space-y-3">
       <h1 className="text-2xl font-semibold">{organization.name}</h1>

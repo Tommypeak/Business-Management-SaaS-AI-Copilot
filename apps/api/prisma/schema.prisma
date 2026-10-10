@@ -414,6 +414,7 @@ model InventoryLedgerEntry {
   variant        CatalogVariant       @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([transactionId, locationId, variantId])
+  @@index([organizationId, createdAt])
   @@index([organizationId, locationId, variantId, createdAt])
   @@index([organizationId, variantId, createdAt])
 }
@@ -513,25 +514,28 @@ model SalesOrder {
   @@index([organizationId, status, createdAt, id])
   @@index([organizationId, customerId, createdAt, id])
   @@index([organizationId, locationId, createdAt, id])
+  @@index([organizationId, completedAt])
+  @@index([organizationId, locationId, completedAt])
 }
 
 model SalesOrderItem {
-  stockDeducted       Boolean        @default(false)
-  id                  String         @id @default(uuid()) @db.Uuid
-  organizationId      String         @db.Uuid
-  salesOrderId        String         @db.Uuid
-  variantId           String         @db.Uuid
-  quantity            Decimal        @db.Decimal(19, 6)
-  unitPrice           Decimal        @db.Decimal(19, 4)
-  discountAmount      Decimal        @db.Decimal(19, 4)
-  lineTotal           Decimal        @db.Decimal(19, 4)
-  snapshotItemName    String         @db.VarChar(200)
-  snapshotVariantName String?        @db.VarChar(120)
-  snapshotSku         String?        @db.VarChar(80)
+  snapshotItemType    CatalogItemType?
+  stockDeducted       Boolean          @default(false)
+  id                  String           @id @default(uuid()) @db.Uuid
+  organizationId      String           @db.Uuid
+  salesOrderId        String           @db.Uuid
+  variantId           String           @db.Uuid
+  quantity            Decimal          @db.Decimal(19, 6)
+  unitPrice           Decimal          @db.Decimal(19, 4)
+  discountAmount      Decimal          @db.Decimal(19, 4)
+  lineTotal           Decimal          @db.Decimal(19, 4)
+  snapshotItemName    String           @db.VarChar(200)
+  snapshotVariantName String?          @db.VarChar(120)
+  snapshotSku         String?          @db.VarChar(80)
   snapshotUnit        UnitOfMeasure
-  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
-  order               SalesOrder     @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
-  variant             CatalogVariant @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  order               SalesOrder       @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant             CatalogVariant   @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([salesOrderId, variantId])
   @@index([organizationId, salesOrderId])
@@ -555,6 +559,7 @@ model SalesPayment {
 
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, salesOrderId, createdAt, id])
+  @@index([organizationId, createdAt])
 }
 
 enum PurchaseOrderStatus {
@@ -637,6 +642,7 @@ model PurchaseOrder {
   @@index([organizationId, status, createdAt, id])
   @@index([organizationId, supplierId])
   @@index([organizationId, destinationLocationId])
+  @@index([organizationId, orderedAt])
 }
 
 model PurchaseOrderItem {

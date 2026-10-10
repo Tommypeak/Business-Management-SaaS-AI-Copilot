@@ -2,9 +2,18 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import type { ExpenseCategoryBreakdownResponse, FinanceSummaryResponse } from '@saas/types';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { inventoryConflict, type InventoryTx } from '../inventory/inventory-locks.js';
+import { type InventoryTx } from '../inventory/inventory-locks.js';
 import { decimal } from '../sales/totals.js';
 import type { FinanceQueryDto } from '../expenses/expenses.dto.js';
+
+import {
+  timestampRange,
+  dateRange,
+  location,
+  singleCurrency,
+  sum,
+  netCashFlow,
+} from './calculations.js';
 
 type MoneyRow = { currencyCode: string; amount: Prisma.Decimal };
 type CategoryRow = {
@@ -14,35 +23,6 @@ type CategoryRow = {
   amount: Prisma.Decimal;
   count: number;
 };
-
-function timestampRange(column: Prisma.Sql, query: FinanceQueryDto, timezone: string) {
-  const filters: Prisma.Sql[] = [];
-  if (query.from)
-    filters.push(
-      Prisma.sql`${column} >= (${query.from}::date::timestamp AT TIME ZONE ${timezone})`,
-    );
-  if (query.to)
-    filters.push(
-      Prisma.sql`${column} < (((${query.to}::date + 1)::timestamp) AT TIME ZONE ${timezone})`,
-    );
-  return filters.length ? Prisma.sql` AND ${Prisma.join(filters, ' AND ')}` : Prisma.empty;
-}
-function dateRange(column: Prisma.Sql, query: FinanceQueryDto) {
-  const filters: Prisma.Sql[] = [];
-  if (query.from) filters.push(Prisma.sql`${column} >= ${query.from}::date`);
-  if (query.to) filters.push(Prisma.sql`${column} <= ${query.to}::date`);
-  return filters.length ? Prisma.sql` AND ${Prisma.join(filters, ' AND ')}` : Prisma.empty;
-}
-const location = (column: Prisma.Sql, id?: string) =>
-  id ? Prisma.sql` AND ${column} = ${id}::uuid` : Prisma.empty;
-function singleCurrency(rows: MoneyRow[], fallback: string) {
-  const currencies = new Set(rows.map((row) => row.currencyCode));
-  if (currencies.size > 1) inventoryConflict('FINANCE_MIXED_CURRENCY');
-  return currencies.values().next().value ?? fallback;
-}
-function sum(rows: MoneyRow[]) {
-  return rows.reduce((result, row) => result.plus(row.amount), decimal(0));
-}
 
 @Injectable()
 export class FinanceService {
@@ -66,6 +46,12 @@ export class FinanceService {
   }
 
   async summary(org: string, query: FinanceQueryDto): Promise<FinanceSummaryResponse> {
+    return (await this.summaryWithCurrencies(org, query)).summary;
+  }
+
+  // Preserve source currencies even when their numeric sum is zero. Analytics uses
+  // this metadata to compare empty periods without treating the fallback as money.
+  async summaryWithCurrencies(org: string, query: FinanceQueryDto) {
     const schema = this.prisma.sqlSchema;
     return this.prisma.$transaction(
       async (tx) => {
@@ -129,14 +115,19 @@ export class FinanceService {
               WHERE b."organizationId" = ${org}::uuid AND b.status = 'POSTED'
               GROUP BY b."currencyCode"
             `);
-        const currencyCode = singleCurrency(
-          [...sales, ...payments, ...expenses, ...outstanding, ...supplierPayments, ...payables],
-          organization.defaultCurrency,
-        );
+        const sourceRows = [
+          ...sales,
+          ...payments,
+          ...expenses,
+          ...outstanding,
+          ...supplierPayments,
+          ...payables,
+        ];
+        const currencyCode = singleCurrency(sourceRows, organization.defaultCurrency);
         const collected = sum(payments),
           paid = sum(expenses),
           supplierPaid = sum(supplierPayments);
-        return {
+        const summary: FinanceSummaryResponse = {
           currencyCode,
           timezone: organization.timezone,
           from: query.from ?? null,
@@ -146,10 +137,11 @@ export class FinanceService {
           expensesPaid: paid.toFixed(4),
           supplierPaymentsPaid: query.locationId ? null : supplierPaid.toFixed(4),
           supplierPaymentsLocationScoped: !query.locationId,
-          netCashFlow: collected.minus(paid).minus(supplierPaid).toFixed(4),
+          netCashFlow: netCashFlow(collected, paid, supplierPaid).toFixed(4),
           outstandingReceivablesCurrent: sum(outstanding).toFixed(4),
           outstandingPayablesCurrent: query.locationId ? null : sum(payables).toFixed(4),
         };
+        return { summary, currencies: [...new Set(sourceRows.map((row) => row.currencyCode))] };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
@@ -158,6 +150,7 @@ export class FinanceService {
   async expensesByCategory(
     org: string,
     query: FinanceQueryDto,
+    limit?: number,
   ): Promise<ExpenseCategoryBreakdownResponse[]> {
     const schema = this.prisma.sqlSchema;
     return this.prisma.$transaction(
@@ -173,6 +166,7 @@ export class FinanceService {
           ${location(Prisma.sql`e."locationId"`, query.locationId)}
           GROUP BY e."categoryId", c.name, e."currencyCode"
           ORDER BY amount DESC, c.name ASC
+          ${limit === undefined ? Prisma.empty : Prisma.sql`LIMIT ${limit}`}
         `);
         singleCurrency(rows, organization.defaultCurrency);
         return rows.map((row) => ({

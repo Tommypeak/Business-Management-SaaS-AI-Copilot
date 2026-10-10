@@ -48,6 +48,7 @@ export class OrdersService {
         unitPrice: decimal(variant.sellingPrice),
         discountAmount: decimal(input.discountAmount),
         snapshotItemName: variant.item.name,
+        snapshotItemType: variant.item.type,
         snapshotVariantName: variant.name,
         snapshotSku: variant.sku,
         snapshotUnit: variant.unit,
