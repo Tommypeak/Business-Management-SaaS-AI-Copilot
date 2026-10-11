@@ -17,6 +17,42 @@ export class InventoryAnalyticsService {
   private movementScope(org: string, c: AnalyticsContext) {
     return Prisma.sql`e."organizationId"=${org}::uuid ${timestampRange(Prisma.sql`e."createdAt"`, c, c.timezone)} ${location(Prisma.sql`e."locationId"`, c.locationId)}`;
   }
+  // Shared candidate definition for counts and bounded stock warnings.
+  private candidates(org: string, locationId?: string) {
+    const s = this.prisma.sqlSchema;
+    return Prisma.sql`WITH balances AS (
+      SELECT "variantId", SUM(quantity) AS quantity, bool_or(quantity <> 0) AS nonzero,
+        count(*) FILTER (WHERE quantity < 0)::int AS negatives
+      FROM ${s}."InventoryBalance" b WHERE b."organizationId"=${org}::uuid ${location(Prisma.sql`b."locationId"`, locationId)} GROUP BY "variantId"
+    ), candidates AS (
+      SELECT v.id, i.name, v.name AS "variantName", v.sku, v.unit::text AS unit,
+        COALESCE(b.quantity,0) AS quantity, COALESCE(b.negatives,0) AS negatives,
+        (v."isActive" AND i."isActive" AND i.type='PRODUCT' AND i."trackInventory") AS active
+      FROM ${s}."CatalogVariant" v JOIN ${s}."CatalogItem" i ON i.id=v."catalogItemId" AND i."organizationId"=v."organizationId"
+      LEFT JOIN balances b ON b."variantId"=v.id
+      WHERE v."organizationId"=${org}::uuid AND ((v."isActive" AND i."isActive" AND i.type='PRODUCT' AND i."trackInventory") OR b.nonzero)
+    )`;
+  }
+  async warnings(org: string, q: AnalyticsQueryDto) {
+    const c = await analyticsContext(this.prisma, org, q);
+    const rows = await this.prisma.$queryRaw<
+      {
+        id: string;
+        name: string;
+        variantName: string | null;
+        sku: string | null;
+        unit: string;
+        quantity: Prisma.Decimal;
+        negatives: number;
+        active: boolean;
+      }[]
+    >(Prisma.sql`
+      ${this.candidates(org, c.locationId)} SELECT * FROM candidates WHERE quantity<=0 OR negatives>0 ORDER BY quantity,id LIMIT 21`);
+    return {
+      items: rows.slice(0, 20).map((r) => ({ ...r, quantity: r.quantity.toFixed(6) })),
+      truncated: rows.length > 20,
+    };
+  }
   async summary(org: string, q: AnalyticsQueryDto): Promise<InventoryAnalyticsSummary> {
     return this.prisma.$transaction(
       async (tx) => {
@@ -25,17 +61,7 @@ export class InventoryAnalyticsService {
         const [row] = await tx.$queryRaw<
           Omit<InventoryAnalyticsSummary, 'context' | 'topMovingVariants'>[]
         >(Prisma.sql`
-        WITH balances AS (
-          SELECT "variantId", SUM(quantity) AS quantity, bool_or(quantity <> 0) AS nonzero,
-            count(*) FILTER (WHERE quantity < 0)::int AS negatives
-          FROM ${s}."InventoryBalance" b WHERE b."organizationId"=${org}::uuid ${location(Prisma.sql`b."locationId"`, c.locationId)} GROUP BY "variantId"
-        ), candidates AS (
-          SELECT v.id, COALESCE(b.quantity,0) AS quantity, COALESCE(b.negatives,0) AS negatives,
-            (v."isActive" AND i."isActive" AND i.type='PRODUCT' AND i."trackInventory") AS active
-          FROM ${s}."CatalogVariant" v JOIN ${s}."CatalogItem" i ON i.id=v."catalogItemId" AND i."organizationId"=v."organizationId"
-          LEFT JOIN balances b ON b."variantId"=v.id
-          WHERE v."organizationId"=${org}::uuid AND ((v."isActive" AND i."isActive" AND i.type='PRODUCT' AND i."trackInventory") OR b.nonzero)
-        ) SELECT count(*)::int AS "trackedVariants", count(*) FILTER (WHERE quantity=0)::int AS "zeroStock",
+        ${this.candidates(org, c.locationId)} SELECT count(*)::int AS "trackedVariants", count(*) FILTER (WHERE quantity=0)::int AS "zeroStock",
           count(*) FILTER (WHERE quantity<0)::int AS "negativeStock", COALESCE(sum(negatives),0)::int AS "negativeLocationBalances",
           count(*) FILTER (WHERE NOT active)::int AS "archivedNonZeroVariants" FROM candidates`);
         const top = await tx.$queryRaw<

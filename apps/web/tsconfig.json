@@ -1,6 +1,7 @@
 {
   "extends": "@saas/config/typescript/base.json",
   "compilerOptions": {
+    "paths": { "@/*": ["./*"] },
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": false,
     "noEmit": true,

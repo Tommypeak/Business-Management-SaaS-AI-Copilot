@@ -10,6 +10,66 @@ datasource db {
   provider = "postgresql"
 }
 
+model AiSettings {
+  organizationId    String       @id @db.Uuid
+  enabled           Boolean      @default(false)
+  disclosureVersion String       @default("v1") @db.VarChar(20)
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime     @updatedAt @db.Timestamptz(3)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AiConversation {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  userId         String       @db.Uuid
+  title          String       @default("New conversation") @db.VarChar(120)
+  nextSequence   Int          @default(0)
+  activeTurnId   String?      @db.Uuid
+  lockedUntil    DateTime?    @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  messages       AiMessage[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, userId, createdAt, id])
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+}
+
+enum AiMessageStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model AiMessage {
+  id                  String          @id @default(uuid()) @db.Uuid
+  organizationId      String          @db.Uuid
+  conversationId      String          @db.Uuid
+  clientMessageId     String          @db.Uuid
+  sequence            Int
+  role                AiMessageRole
+  content             String          @db.VarChar(12000)
+  status              AiMessageStatus @default(PENDING)
+  errorCode           String?         @db.VarChar(80)
+  requiredPermissions String[]
+  sources             Json            @default("[]")
+  usage               Json?
+  requestId           String?         @db.Uuid
+  createdAt           DateTime        @default(now()) @db.Timestamptz(3)
+  conversation        AiConversation  @relation(fields: [conversationId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([conversationId, clientMessageId, role])
+  @@unique([conversationId, sequence])
+  @@index([organizationId, conversationId, sequence])
+}
+
 enum BusinessType {
   RETAIL
   SERVICES
@@ -45,6 +105,8 @@ model User {
   purchaseOrders        PurchaseOrder[]
   goodsReceipts         GoodsReceipt[]
 
+  aiConversations AiConversation[]
+
   @@unique([authProvider, authSubject])
 }
 
@@ -78,6 +140,8 @@ model Organization {
   expenseSequence       ExpenseSequence?
   supplierBills         SupplierBill[]
   supplierBillSequence  SupplierBillSequence?
+  aiSettings            AiSettings?
+  aiConversations       AiConversation[]
 }
 
 model OrganizationMembership {

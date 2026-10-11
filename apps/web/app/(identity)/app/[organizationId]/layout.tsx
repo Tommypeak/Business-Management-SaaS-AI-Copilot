@@ -10,7 +10,7 @@ export default async function OrganizationLayout({
 }) {
   const { organizationId } = await params;
   const [organization, organizations] = await Promise.all([
-    api.organization(organizationId),
+    api.organizationContext(organizationId),
     api.organizations(),
   ]);
   return (
@@ -18,7 +18,7 @@ export default async function OrganizationLayout({
       <OrganizationNavigation
         org={organizationId}
         organizations={organizations}
-        permissions={organization.currentMembership.permissions}
+        permissions={organization.permissions}
       />
       <main className="organization-content" id="main-content">
         {children}

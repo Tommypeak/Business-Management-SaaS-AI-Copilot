@@ -8,6 +8,7 @@ import { AccountsPayableQueryService } from './query.service.js';
 @Module({
   imports: [PrismaModule, AuthorizationModule],
   controllers: [AccountsPayableController],
+  exports: [AccountsPayableQueryService],
   providers: [AccountsPayableCommandsService, AccountsPayableQueryService],
 })
 export class AccountsPayableModule {}

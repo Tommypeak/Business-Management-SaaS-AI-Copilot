@@ -10,7 +10,10 @@ Stage 4 добавляет inventory ledger, остатки по Locations, open
 корректировки, перемещения, reversals и negative-stock policy.
 Stage 5 добавляет Customers, draft Sales Orders, completion с атомарным списанием
 Inventory, snapshot цен/названий и частичные/полные ручные Payments.
-Закупки, возвраты, налоги, оценка стоимости запасов и AI-интеграции ещё не реализованы.
+Stage 6–9 добавляют закупки и получение товаров, расходы, финансы, Accounts Payable,
+Dashboard и аналитику. Stage 10 добавляет read-only AI Copilot с инструментами,
+историей разговоров, tenant/RBAC isolation и настройками передачи данных провайдеру.
+Возвраты, налоги и оценка стоимости запасов пока не реализованы.
 Подробности безопасности, API и настройки identity: [Stage 2](docs/stage-2.md).
 Архитектура, ограничения и API каталога: [Stage 3](docs/stage-3.md).
 Складской учёт, блокировки, idempotency и API: [Stage 4](docs/stage-4.md).
@@ -27,7 +30,9 @@ NestJS → FastAPI AI Service
 
 Web вызывает NestJS из server components/actions с проверяемым JWT. NestJS хранит
 identity и tenant authorization в PostgreSQL; Redis доступен для readiness.
-Взаимодействие с AI пока является целевым направлением, без вызовов ML/LLM.
+NestJS выполняет разрешённые бизнес-инструменты; FastAPI обращается к настроенному
+LLM через Chat Completions. Redis обеспечивает общие лимиты AI между репликами.
+Copilot по умолчанию выключен для каждой организации.
 
 Основной backend — modular monolith. Будущие бизнес-модули будут размещаться внутри
 NestJS. Python-сервис выделен отдельно для Python/ML ecosystem.
@@ -309,6 +314,44 @@ Web standalone использует `PORT` (3000) и `HOSTNAME` (0.0.0.0). Пе�
 `API_BASE_URL` должен указывать на сервис API, а не localhost web-контейнера.
 AI слушает 8000; при необходимости измените uvicorn command.
 Пароли не передаются через build arguments и не сохраняются в image.
+
+## AI Copilot (Stage 10)
+
+Полная архитектура, permissions и ограничения: [Stage 10](docs/stage-10-ai-business-copilot.md).
+
+1. Получите API key в серверном проекте [OpenAI API](https://platform.openai.com/api-keys)
+   или у проверенного совместимого провайдера. Подписка ChatGPT сама по себе не является API key.
+2. Запишите ключ только в server environment `AI_PROVIDER_API_KEY`; для локального запуска
+   используется git-ignored корневой `.env`. Никогда не используйте `NEXT_PUBLIC_` для секретов.
+3. Укажите `AI_MODEL` с поддержкой structured function calling. Значение по умолчанию —
+   `gpt-4.1-mini`; доступность выбранной модели зависит от аккаунта провайдера.
+   `AI_PROVIDER_BASE_URL=https://api.openai.com/v1` — стандартный вариант протокола.
+   Для других HTTPS endpoints необходим отдельный compatibility smoke test.
+4. Создайте случайный `AI_SERVICE_SECRET` минимум из 32 символов и задайте одинаковое значение
+   в API и FastAPI. `AI_SERVICE_URL` задаётся администратором, не пользователем чата.
+5. Запустите сервисы (`pnpm dev`). На странице `/app/<organizationId>/ai` кнопка
+   **Check connection** проверяет доступность внутреннего сервиса и наличие конфигурации.
+   Она не делает платный вызов и не подтверждает валидность ключа у внешнего провайдера.
+6. OWNER открывает **AI Settings**, читает disclosure и явно включает Copilot.
+   Только после этого сообщения могут передаваться модели. Проверьте короткий вопрос и
+   вопрос с business tool; без ключа приложение показывает `AI_PROVIDER_NOT_CONFIGURED`.
+
+Лимиты по умолчанию: 15 попыток на пользователя в час, 200 на организацию в сутки,
+6 tool calls, 4 tool rounds, 20 предыдущих сообщений, 48 000 символов контекста,
+1500 output tokens на вызов модели, 60 секунд на turn. Лимиты задаются server env
+и действуют через Redis, включая неуспешные попытки после резервирования лимита.
+
+В production размещайте AI service только во внутренней сети. Опциональный файл
+`docker-compose.ai.yml` собирает AI без публикации порта; API в той же сети использует
+`AI_SERVICE_URL=http://ai:8000`. На другой машине/недоверенной сети используйте TLS.
+Передавайте provider key только контейнеру AI, service secret — API и AI.
+`docker compose -f docker-compose.yml -f docker-compose.ai.yml up -d --build --wait`
+запускает инфраструктуру и внутренний AI, но не Web/API.
+
+CI использует детерминированные mock providers. Реальный платный ключ для тестов не нужен.
+LLM не выполняет SQL, shell или записи в бизнес-модули; финансовые инструменты требуют
+`finance.view`. Пользователь удаляет только собственную историю; retention провайдера
+регулируется его условиями, удаление локальной истории не удаляет внешние копии.
 
 ## CI
 

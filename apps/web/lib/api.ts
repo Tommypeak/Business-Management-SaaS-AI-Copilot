@@ -8,6 +8,7 @@ import type {
   LocationResponse,
   OrganizationInput,
   LocationInput,
+  PermissionCode,
 } from '@saas/types';
 
 export class ApiError extends Error {
@@ -137,6 +138,8 @@ export async function list<T>(path: string): Promise<T[]> {
 }
 
 export const api = {
+  organizationContext: (id: string) =>
+    request<{ permissions: PermissionCode[] }>(`/organizations/${encodeURIComponent(id)}/context`),
   organizations: () => list<OrganizationResponse>('/organizations'),
   organization: async (id: string) => {
     try {

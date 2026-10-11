@@ -23,6 +23,13 @@ export class OrganizationsController {
   create(@CurrentUser() user: LocalUser, @Body() input: CreateOrganizationDto) {
     return this.organizations.create(user.id, input);
   }
+  @Get(':organizationId/context')
+  @UseGuards(OrganizationMembershipGuard)
+  context(@CurrentOrganization() tenant: OrganizationContext) {
+    // A member may inspect their own access without organization.view.
+    // Business and organization-detail endpoints retain their own guards.
+    return tenant;
+  }
 }
 
 @ApiTags('Organizations')

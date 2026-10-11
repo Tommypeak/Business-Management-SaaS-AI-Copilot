@@ -39,7 +39,7 @@ jobs:
           sed -i "s/replace_with_local_password/$password/g" .env
           docker compose up -d --wait
           docker compose exec -T postgres createdb -U saas business_management_test
-          printf '\nTEST_DATABASE_URL=postgresql://saas:%s@127.0.0.1:5432/business_management_test\n' "$password" >> .env
+          printf '\nTEST_DATABASE_URL=postgresql://saas:%s@127.0.0.1:5433/business_management_test\n' "$password" >> .env
       - run: pnpm --filter @saas/api db:validate
       - run: pnpm --filter @saas/api db:migrate
       - run: pnpm format:check

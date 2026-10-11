@@ -6,6 +6,46 @@ import type { StockQueryDto } from './inventory.dto.js';
 @Injectable()
 export class InventoryStockService {
   constructor(private readonly prisma: PrismaService) {}
+  async variant(org: string, variantId: string, locationId?: string) {
+    const variant = await this.prisma.catalogVariant.findFirst({
+      where: { id: variantId, organizationId: org },
+      select: { id: true, name: true, sku: true, unit: true, item: { select: { name: true } } },
+    });
+    if (!variant) throw new NotFoundException();
+    if (
+      locationId &&
+      !(await this.prisma.location.findFirst({
+        where: { id: locationId, organizationId: org },
+        select: { id: true },
+      }))
+    )
+      throw new NotFoundException();
+    const where = { organizationId: org, variantId, locationId };
+    const [total, balances] = await Promise.all([
+      this.prisma.inventoryBalance.aggregate({ where, _sum: { quantity: true } }),
+      this.prisma.inventoryBalance.findMany({
+        where,
+        take: 21,
+        orderBy: { locationId: 'asc' },
+        select: { locationId: true, quantity: true, location: { select: { name: true } } },
+      }),
+    ]);
+    return {
+      variantId,
+      itemName: variant.item.name,
+      variantName: variant.name,
+      sku: variant.sku,
+      unit: variant.unit,
+      quantity: total._sum.quantity?.toFixed(6) ?? '0.000000',
+      locations: balances.slice(0, 20).map((b) => ({
+        locationId: b.locationId,
+        name: b.location.name,
+        quantity: b.quantity.toFixed(6),
+      })),
+      locationsTruncated: balances.length > 20,
+      missingBalanceMeansZero: true,
+    };
+  }
   async list(org: string, query: StockQueryDto): Promise<PageResponse<InventoryStockRow>> {
     const location = query.locationId
       ? await this.prisma.location.findFirst({

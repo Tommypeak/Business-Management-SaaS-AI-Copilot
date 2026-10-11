@@ -20,6 +20,7 @@ export function OrganizationNavigation({
     {
       title: 'Workspace',
       items: [
+        ['AI Copilot', 'ai', Permission.AI_USE, '✳'],
         ['Dashboard', 'dashboard', Permission.ANALYTICS_VIEW, '◫'],
         ['Sales', 'sales', Permission.SALES_VIEW, '↗'],
         ['Customers', 'customers', Permission.CUSTOMERS_VIEW, '◉'],
@@ -46,6 +47,7 @@ export function OrganizationNavigation({
         ['Overview', '', Permission.ORGANIZATION_VIEW, '○'],
         ['Locations', 'locations', Permission.LOCATIONS_VIEW, '⌖'],
         ['Settings', 'settings', Permission.ORGANIZATION_UPDATE, '⚙'],
+        ['AI Settings', 'ai/settings', Permission.AI_MANAGE, '✧'],
       ],
     },
   ];

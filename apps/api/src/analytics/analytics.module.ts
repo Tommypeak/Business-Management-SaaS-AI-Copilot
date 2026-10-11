@@ -11,6 +11,13 @@ import { FinanceAnalyticsService } from './finance-analytics.service.js';
 @Module({
   imports: [PrismaModule, AuthorizationModule, FinanceModule],
   controllers: [AnalyticsController],
+  exports: [
+    AnalyticsService,
+    SalesAnalyticsService,
+    InventoryAnalyticsService,
+    PurchasingAnalyticsService,
+    FinanceAnalyticsService,
+  ],
   providers: [
     AnalyticsService,
     SalesAnalyticsService,

@@ -12,7 +12,9 @@ export const SYSTEM_ROLES = [
     name: 'Administrator',
     permissions: ALL_PERMISSIONS.filter(
       (permission) =>
-        permission !== Permission.ROLES_MANAGE && permission !== Permission.MEMBERS_MANAGE,
+        permission !== Permission.ROLES_MANAGE &&
+        permission !== Permission.MEMBERS_MANAGE &&
+        permission !== Permission.AI_MANAGE,
     ),
   },
   {

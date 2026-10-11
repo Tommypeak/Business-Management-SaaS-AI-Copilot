@@ -28,6 +28,8 @@ import { registerCatalogTests } from './catalog.scenarios.js';
 import { registerInventoryTests } from './inventory.scenarios.js';
 import { registerSalesTests } from './sales.scenarios.js';
 import { registerAnalyticsTests } from './analytics.scenarios.js';
+import { registerAiTests } from './ai.scenarios.js';
+import { startAiStub, stopAiStub } from './ai-provider.stub.js';
 import { registerPurchasingTests } from './purchasing.scenarios.js';
 import { registerExpensesFinanceTests } from './expenses-finance.scenarios.js';
 import { registerAccountsPayableTests } from './accounts-payable.scenarios.js';
@@ -170,6 +172,7 @@ before(async () => {
     AUTH_AUDIENCE: 'saas-api',
     AUTH_AUTHORIZED_PARTIES: 'http://localhost:3000',
   });
+  await startAiStub();
   const { AppModule } = await import('../src/app.module.js');
   const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
   app = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), {
@@ -187,6 +190,7 @@ before(async () => {
 });
 
 after(async () => {
+  await stopAiStub();
   if (app) await app.close();
   if (jwks)
     await new Promise<void>((resolve, reject) =>
@@ -585,3 +589,4 @@ registerPurchasingTests(() => ({ app, prisma, admin, schema, token, legacyOrgani
 registerExpensesFinanceTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
 registerAccountsPayableTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
 registerAnalyticsTests(() => ({ app, prisma, token, legacyOrganizationId }));
+registerAiTests(() => ({ app, prisma, token, legacyOrganizationId }));
