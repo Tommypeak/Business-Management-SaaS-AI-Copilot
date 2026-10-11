@@ -13,6 +13,15 @@ const period = ['from', 'to', 'locationId'] as const;
 const sales = [P.ANALYTICS_VIEW, P.SALES_VIEW, P.FINANCE_VIEW];
 export const AI_TOOLS: readonly Tool[] = [
   {
+    name: 'get_customer_returns_summary',
+    description:
+      'Posted customer returns and proportional credits, actual refund cash by payment date, and quantities grouped by historic unit/type. Credits are not cash payouts; finance fields are unavailable without permission.',
+    fields: [...period, 'granularity', 'limit'],
+    permissions: [P.RETURNS_VIEW],
+    route: 'returns',
+    label: 'Customer Returns',
+  },
+  {
     name: 'get_business_overview',
     description: 'Operational overview for a period; includes finance only when permitted.',
     fields: period,
@@ -74,7 +83,7 @@ export const AI_TOOLS: readonly Tool[] = [
   {
     name: 'get_finance_summary',
     description:
-      'Authoritative customer receipts minus posted expenses minus supplier payments, plus current receivables/payables. Not profit. Supplier totals unavailable with a location.',
+      'Authoritative customer receipts minus customer refunds minus posted expenses minus supplier payments, plus current net receivables/payables. Not profit. Supplier totals unavailable with a location.',
     fields: period,
     permissions: [P.FINANCE_VIEW],
     route: 'finance',

@@ -15,6 +15,7 @@ import {
   type SalesAnalyticsSummary,
   type SalesTrendResponse,
   type TopSellingVariant,
+  type ReturnsAnalyticsSummary,
 } from '@saas/types';
 import { api } from '../../lib/api';
 import { analyticsRequest, type AnalyticsResult } from '../../lib/analytics';
@@ -134,6 +135,7 @@ export async function AnalyticsScreen({
     receiving,
     cash,
     activity,
+    returnsData,
   ] = await Promise.all([
     permissions.includes(Permission.LOCATIONS_VIEW) ? api.locations(org) : Promise.resolve([]),
     get<ExecutiveOverviewResponse>('overview', mode === 'dashboard'),
@@ -162,6 +164,11 @@ export async function AnalyticsScreen({
     mode === 'inventory'
       ? analyticsRequest<BusinessActivity[]>(org, 'activity', qs + '&kind=INVENTORY')
       : get<BusinessActivity[]>('activity', mode === 'dashboard'),
+    get<ReturnsAnalyticsSummary>(
+      'returns/summary',
+      permissions.includes(Permission.RETURNS_VIEW) &&
+        ['dashboard', 'sales', 'finance'].includes(mode),
+    ),
   ]);
   const topEnabled = financeAllowed && (mode === 'dashboard' || mode === 'sales');
   const [topProducts, topServices] = await Promise.all(
@@ -195,6 +202,7 @@ export async function AnalyticsScreen({
         bucket: p.bucket,
         values: {
           customer: p.customerPayments,
+          refunds: p.customerRefunds,
           expenses: p.operatingExpenses,
           supplier: p.supplierPayments,
           net: p.netCashFlow,
@@ -202,6 +210,7 @@ export async function AnalyticsScreen({
       }))}
       series={[
         { key: 'customer', label: 'Customer payments', color: 'var(--chart-2)' },
+        { key: 'refunds', label: 'Customer refunds', color: 'var(--danger)' },
         { key: 'expenses', label: 'Operating expenses', color: 'var(--chart-3)' },
         ...(!filters.locationId
           ? [{ key: 'supplier', label: 'Supplier payments', color: 'var(--chart-4)' }]
@@ -285,7 +294,7 @@ export async function AnalyticsScreen({
                 value={d.summary.netCashFlow}
                 unit={d.summary.currencyCode}
                 metric={compare ? d.comparisons.netCashFlow : undefined}
-                description="Customer payments minus operating expenses and supplier payments."
+                description="Customer payments minus customer refunds, operating expenses and supplier payments."
                 accent
               />
             </div>
@@ -325,6 +334,66 @@ export async function AnalyticsScreen({
               description="Recorded product/service types. Older sales can be Unknown."
             />
           </div>
+        ))}
+      {returnsData &&
+        show(returnsData, (d) => (
+          <section className="space-y-4">
+            <h3 className="text-lg font-semibold">Customer returns & refunds</h3>
+            <div className="kpi-grid">
+              <KpiCard
+                label="Posted returns"
+                value={String(d.returnsCount)}
+                description="Events by posting date in the organization timezone."
+              />
+              {d.financeVisible && (
+                <>
+                  <KpiCard
+                    label="Return credits"
+                    value={d.postedReturnCredits ?? '0'}
+                    unit={d.currencyCode ?? undefined}
+                    description="Reduces sales and receivables; no cash payout."
+                  />
+                  <KpiCard
+                    label="Customer refunds"
+                    value={d.customerRefundsPaid ?? '0'}
+                    unit={d.currencyCode ?? undefined}
+                    description="Actual recorded cash outflows by payment date."
+                  />
+                </>
+              )}
+            </div>
+            <p className="muted text-sm">
+              Gross sales and average order value preserve original completed orders. Return events
+              may relate to sales from earlier periods. Quantities below are grouped by unit and
+              historical type.
+            </p>
+            <DataTable
+              headers={['Returned item', 'Historic type', 'Quantity & unit', 'Return credit']}
+              rows={d.topReturnedVariants.map((v) => [
+                v.itemName,
+                v.type,
+                `${v.quantityReturned} ${v.unit}`,
+                v.returnCredits === null
+                  ? 'Finance access required'
+                  : `${v.returnCredits} ${d.currencyCode}`,
+              ])}
+            />
+            <details>
+              <summary>Return & refund calendar trend</summary>
+              <DataTable
+                headers={['Bucket', 'Posted returns', 'Return credits', 'Refund payouts']}
+                rows={d.trend.map((t) => [
+                  t.bucket,
+                  t.returnsCount,
+                  t.postedReturnCredits ?? 'Finance access required',
+                  t.customerRefundsPaid ?? 'Finance access required',
+                ])}
+              />
+            </details>
+            <Link className="underline" href={`/app/${org}/returns`}>
+              Open customer returns
+            </Link>
+          </section>
         ))}
       {mode === 'inventory' &&
         show(stock, (d) => (
@@ -667,14 +736,15 @@ export async function AnalyticsScreen({
       {filters.locationId && (mode === 'dashboard' || mode === 'finance') && (
         <p className="analytics-note">
           Supplier payments are not allocated to individual locations. Supplier payment and payable
-          totals are N/A; location net cash flow includes customer payments minus location expenses.
+          totals are N/A; location net cash flow includes customer payments minus customer refunds
+          and location expenses.
         </p>
       )}
       {(mode === 'dashboard' || mode === 'finance') && (
         <p className="analytics-note">
-          Net Cash Flow is not Net Profit. It reflects customer payments minus recorded operating
-          expenses and supplier payments actually made. It is not a complete bank statement and
-          excludes inventory valuation, COGS, taxes and accounting adjustments.
+          Net Cash Flow is not Net Profit. It reflects customer payments minus customer refunds and
+          recorded operating expenses and supplier payments actually made. It is not a complete bank
+          statement and excludes inventory valuation, COGS, taxes and accounting adjustments.
         </p>
       )}
       {mode === 'inventory' && (

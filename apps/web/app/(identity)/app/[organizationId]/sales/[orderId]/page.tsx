@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Permission } from '@saas/types';
 import { api } from '../../../../../../lib/api';
 import { salesApi } from '../../../../../../lib/sales';
+import { returnsApi } from '../../../../../../lib/returns';
 import { CancelForm, CompletionForm, ItemsForm, OrderMetadataForm, PaymentForm } from '../forms';
 export default async function OrderPage({
   params,
@@ -17,6 +18,16 @@ export default async function OrderPage({
     draft = order.status === 'DRAFT',
     manage = permissions.includes(Permission.SALES_MANAGE),
     pay = permissions.includes(Permission.SALES_PAYMENTS_MANAGE);
+  const eligibility =
+    order.status === 'COMPLETED' && permissions.includes(Permission.RETURNS_VIEW)
+      ? await returnsApi.eligibility(org, orderId)
+      : null;
+  const returns = eligibility
+    ? await returnsApi.list(
+        org,
+        new URLSearchParams({ salesOrderId: orderId, limit: '25' }).toString(),
+      )
+    : null;
   const locations =
     draft && manage && permissions.includes(Permission.LOCATIONS_VIEW)
       ? await api.locations(org)
@@ -84,7 +95,8 @@ export default async function OrderPage({
         <p>Discount: {order.discountTotal}</p>
         <p className="font-semibold">Total: {order.total}</p>
         <p>
-          Paid: {order.paidAmount} · Outstanding: {order.outstandingAmount} · {order.paymentStatus}
+          Original payments: {order.paidAmount} · Outstanding after returns:{' '}
+          {eligibility?.netOutstandingAmount ?? order.outstandingAmount}
         </p>
       </div>
       {draft && permissions.includes(Permission.SALES_COMPLETE) && (
@@ -92,12 +104,44 @@ export default async function OrderPage({
       )}
       {draft && manage && <CancelForm org={org} id={order.id} />}
       {order.status === 'COMPLETED' && (
-        <p>
-          Sale completed; applicable stock movements were recorded atomically. Returns and refunds
-          are not available in this stage.
-        </p>
+        <p>Sale completed; its quantities, prices and payments remain in the original record.</p>
       )}
       <h3 className="font-semibold">Payments</h3>
+      {eligibility && (
+        <section className="panel space-y-3">
+          <h3 className="font-semibold">Returns & customer payouts</h3>
+          {eligibility.financeVisible && (
+            <>
+              <p>
+                Posted credits: {eligibility.postedReturnCredits} · Adjusted sale:{' '}
+                {eligibility.adjustedSalesAmount} {order.currencyCode}
+              </p>
+              <p>
+                Customer payouts: {eligibility.refundedAmount} · Net paid:{' '}
+                {eligibility.netPaidAmount} · Net outstanding: {eligibility.netOutstandingAmount}
+              </p>
+            </>
+          )}
+          {permissions.includes(Permission.RETURNS_MANAGE) && (
+            <Link className="button" href={`/app/${org}/returns/new?salesOrderId=${orderId}`}>
+              Return items
+            </Link>
+          )}
+          {returns?.items.map((r) => (
+            <p key={r.id}>
+              <Link className="underline" href={`/app/${org}/returns/${r.id}`}>
+                {r.number} · {r.status}
+              </Link>
+            </p>
+          ))}
+          <Link className="underline" href={`/app/${org}/returns?salesOrderId=${orderId}`}>
+            All returns for this sale
+          </Link>{' '}
+          <Link className="underline" href={`/app/${org}/refunds?salesOrderId=${orderId}`}>
+            Customer payouts
+          </Link>
+        </section>
+      )}
       <div className="overflow-x-auto">
         <table className="catalog-table">
           <thead>
@@ -122,9 +166,14 @@ export default async function OrderPage({
           </tbody>
         </table>
       </div>
-      {order.status === 'COMPLETED' && pay && order.paymentStatus !== 'PAID' && (
-        <PaymentForm org={org} order={order} />
-      )}
+      {order.status === 'COMPLETED' &&
+        pay &&
+        (eligibility?.netOutstandingAmount !== undefined &&
+        eligibility.netOutstandingAmount !== null
+          ? Number(eligibility.netOutstandingAmount) > 0
+          : order.paymentStatus !== 'PAID') && (
+          <PaymentForm org={org} order={order} outstanding={eligibility?.netOutstandingAmount} />
+        )}
     </div>
   );
 }

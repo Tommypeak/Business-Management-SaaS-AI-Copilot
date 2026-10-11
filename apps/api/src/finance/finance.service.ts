@@ -81,15 +81,32 @@ export class FinanceService {
           ${location(Prisma.sql`e."locationId"`, query.locationId)}
           GROUP BY e."currencyCode"
         `);
+        const returnCredits = await tx.$queryRaw<MoneyRow[]>(Prisma.sql`
+          SELECT r."currencyCode",SUM(r."totalRefundableAmount") AS amount
+          FROM ${schema}."SalesReturn" r JOIN ${schema}."SalesOrder" so ON so.id=r."salesOrderId" AND so."organizationId"=r."organizationId"
+          WHERE r."organizationId"=${org}::uuid AND r.status='POSTED'
+          ${timestampRange(Prisma.sql`r."postedAt"`, query, organization.timezone)}
+          ${location(Prisma.sql`so."locationId"`, query.locationId)} GROUP BY r."currencyCode"
+        `);
+        const customerRefunds = await tx.$queryRaw<MoneyRow[]>(Prisma.sql`
+          SELECT r."currencyCode",SUM(r.amount) AS amount
+          FROM ${schema}."CustomerRefund" r JOIN ${schema}."SalesOrder" so ON so.id=r."salesOrderId" AND so."organizationId"=r."organizationId"
+          WHERE r."organizationId"=${org}::uuid ${dateRange(Prisma.sql`r."paymentDate"`, query)}
+          ${location(Prisma.sql`so."locationId"`, query.locationId)} GROUP BY r."currencyCode"
+        `);
         const outstanding = await tx.$queryRaw<MoneyRow[]>(Prisma.sql`
           SELECT so."currencyCode",
-            SUM(GREATEST(so.total - COALESCE(p.paid, 0), 0)) AS amount
+            SUM(GREATEST(so.total - COALESCE(c.credit,0) - COALESCE(p.paid, 0) + COALESCE(f.refunded,0), 0)) AS amount
           FROM ${schema}."SalesOrder" so
           LEFT JOIN (
             SELECT "salesOrderId", SUM(amount) AS paid
             FROM ${schema}."SalesPayment" WHERE "organizationId" = ${org}::uuid
             GROUP BY "salesOrderId"
           ) p ON p."salesOrderId" = so.id
+          LEFT JOIN (SELECT "salesOrderId",SUM("totalRefundableAmount") credit FROM ${schema}."SalesReturn"
+            WHERE "organizationId"=${org}::uuid AND status='POSTED' GROUP BY "salesOrderId") c ON c."salesOrderId"=so.id
+          LEFT JOIN (SELECT "salesOrderId",SUM(amount) refunded FROM ${schema}."CustomerRefund"
+            WHERE "organizationId"=${org}::uuid GROUP BY "salesOrderId") f ON f."salesOrderId"=so.id
           WHERE so."organizationId" = ${org}::uuid AND so.status = 'COMPLETED'
           ${location(Prisma.sql`so."locationId"`, query.locationId)}
           GROUP BY so."currencyCode"
@@ -122,6 +139,8 @@ export class FinanceService {
           ...outstanding,
           ...supplierPayments,
           ...payables,
+          ...returnCredits,
+          ...customerRefunds,
         ];
         const currencyCode = singleCurrency(sourceRows, organization.defaultCurrency);
         const collected = sum(payments),
@@ -134,10 +153,15 @@ export class FinanceService {
           to: query.to ?? null,
           salesAmount: sum(sales).toFixed(4),
           paymentsCollected: collected.toFixed(4),
+          postedReturnCredits: sum(returnCredits).toFixed(4),
+          customerRefundsPaid: sum(customerRefunds).toFixed(4),
+          adjustedSalesAmount: sum(sales).minus(sum(returnCredits)).toFixed(4),
           expensesPaid: paid.toFixed(4),
           supplierPaymentsPaid: query.locationId ? null : supplierPaid.toFixed(4),
           supplierPaymentsLocationScoped: !query.locationId,
-          netCashFlow: netCashFlow(collected, paid, supplierPaid).toFixed(4),
+          netCashFlow: netCashFlow(collected, paid, supplierPaid)
+            .minus(sum(customerRefunds))
+            .toFixed(4),
           outstandingReceivablesCurrent: sum(outstanding).toFixed(4),
           outstandingPayablesCurrent: query.locationId ? null : sum(payables).toFixed(4),
         };

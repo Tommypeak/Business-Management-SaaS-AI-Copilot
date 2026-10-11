@@ -60,12 +60,17 @@ export class FinanceAnalyticsService {
             customerPayments: Prisma.Decimal;
             operatingExpenses: Prisma.Decimal;
             supplierPayments: Prisma.Decimal;
+            customerRefunds: Prisma.Decimal;
           }[]
         >(Prisma.sql`
         WITH calendar AS (${buckets(c)}), events AS (
           SELECT ${bucket(Prisma.sql`p."createdAt"`, c)} AS bucket,o."currencyCode",p.amount,'customer' AS kind
           FROM ${s}."SalesPayment" p JOIN ${s}."SalesOrder" o ON o.id=p."salesOrderId" AND o."organizationId"=p."organizationId"
           WHERE p."organizationId"=${org}::uuid ${timestampRange(Prisma.sql`p."createdAt"`, c, c.timezone)} ${location(Prisma.sql`o."locationId"`, c.locationId)}
+          UNION ALL
+          SELECT ${bucket(Prisma.sql`r."paymentDate"`, c, false)},r."currencyCode",r.amount,'refund'
+          FROM ${s}."CustomerRefund" r JOIN ${s}."SalesOrder" o ON o.id=r."salesOrderId" AND o."organizationId"=r."organizationId"
+          WHERE r."organizationId"=${org}::uuid ${dateRange(Prisma.sql`r."paymentDate"`, c)} ${location(Prisma.sql`o."locationId"`, c.locationId)}
           UNION ALL
           SELECT ${bucket(Prisma.sql`e."expenseDate"`, c, false)},e."currencyCode",e.amount,'expense'
           FROM ${s}."Expense" e WHERE e."organizationId"=${org}::uuid AND e.status='POSTED'
@@ -79,9 +84,10 @@ export class FinanceAnalyticsService {
           }
         ), meta AS (SELECT count(DISTINCT "currencyCode")::int AS count,min("currencyCode") AS currency FROM events), totals AS (
           SELECT bucket,COALESCE(SUM(amount) FILTER(WHERE kind='customer'),0) AS customer,
+            COALESCE(SUM(amount) FILTER(WHERE kind='refund'),0) AS refund,
             COALESCE(SUM(amount) FILTER(WHERE kind='expense'),0) AS expense,COALESCE(SUM(amount) FILTER(WHERE kind='supplier'),0) AS supplier FROM events GROUP BY bucket
         ) SELECT to_char(calendar.bucket,'YYYY-MM-DD') AS bucket,meta.currency AS "currencyCode",meta.count AS "currencyCount",
-          COALESCE(t.customer,0) AS "customerPayments",COALESCE(t.expense,0) AS "operatingExpenses",COALESCE(t.supplier,0) AS "supplierPayments"
+          COALESCE(t.customer,0) AS "customerPayments",COALESCE(t.refund,0) AS "customerRefunds",COALESCE(t.expense,0) AS "operatingExpenses",COALESCE(t.supplier,0) AS "supplierPayments"
           FROM calendar CROSS JOIN meta LEFT JOIN totals t USING(bucket) ORDER BY calendar.bucket`);
         if (rows[0]!.currencyCount > 1) inventoryConflict('FINANCE_MIXED_CURRENCY');
         return {
@@ -91,13 +97,16 @@ export class FinanceAnalyticsService {
           points: rows.map((r) => ({
             bucket: r.bucket,
             customerPayments: amount(r.customerPayments),
+            customerRefunds: amount(r.customerRefunds),
             operatingExpenses: amount(r.operatingExpenses),
             supplierPayments: c.locationId ? null : amount(r.supplierPayments),
             netCashFlow: netCashFlow(
               decimal(r.customerPayments),
               decimal(r.operatingExpenses),
               decimal(r.supplierPayments),
-            ).toFixed(4),
+            )
+              .minus(decimal(r.customerRefunds))
+              .toFixed(4),
           })),
         };
       },

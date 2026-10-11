@@ -13,7 +13,7 @@ import {
   type SupplierResponse,
   type UserResponse,
 } from '@saas/types';
-import type { PrismaClient } from '../src/generated/prisma/client.js';
+import { Prisma, type PrismaClient } from '../src/generated/prisma/client.js';
 import type { PrismaService } from '../src/prisma/prisma.service.js';
 interface Context {
   app: NestFastifyApplication;
@@ -814,6 +814,73 @@ export function registerPurchasingTests(context: () => Context) {
       );
       await db.$executeRawUnsafe(`DROP FUNCTION "${schema}".fail_purchase_projection()`);
     }
+  });
+
+  void test('direct SQL cannot reverse PURCHASE_RECEIPT and rolls back every attempted effect', async () => {
+    const item = await ok<CatalogItemResponse>('POST', `${base()}/catalog/items`, {
+      name: 'Receipt reversal SQL regression',
+      type: 'PRODUCT',
+      trackInventory: true,
+      defaultVariant: { unit: 'PIECE', sellingPrice: '1' },
+    });
+    const created = await draft([line(item, '2', '1')]);
+    await order(created.id);
+    const received = await receipt(created.id, [
+      { purchaseOrderItemId: created.items[0]!.id, quantity: '2' },
+    ]);
+    const { prisma } = context();
+    const original = await prisma.inventoryTransaction.findUniqueOrThrow({
+      where: { goodsReceiptId: received.id },
+    });
+    const before = {
+      transactions: await prisma.inventoryTransaction.count(),
+      entries: await prisma.inventoryLedgerEntry.count(),
+      balance: await stock(item.defaultVariant.id),
+      receipt: await prisma.goodsReceipt.findUniqueOrThrow({ where: { id: received.id } }),
+    };
+    const reversalId = randomUUID();
+    await assert.rejects(
+      prisma.$transaction(async (tx) => {
+        // A write preceding the rejected raw INSERT must also roll back.
+        await tx.inventoryBalance.updateMany({
+          where: { organizationId: org, locationId: location, variantId: item.defaultVariant.id },
+          data: { quantity: '0' },
+        });
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO ${prisma.sqlSchema}."InventoryTransaction"
+            (id,"organizationId",type,"createdByUserId","idempotencyKey","requestHash","reversesTransactionId")
+          VALUES (${reversalId}::uuid,${org}::uuid,'REVERSAL',${original.createdByUserId}::uuid,
+            ${randomUUID()}::uuid,${'0'.repeat(64)},${original.id}::uuid)`);
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO ${prisma.sqlSchema}."InventoryLedgerEntry"
+            (id,"organizationId","transactionId","locationId","variantId","quantityDelta")
+          VALUES (${randomUUID()}::uuid,${org}::uuid,${reversalId}::uuid,${location}::uuid,
+            ${item.defaultVariant.id}::uuid,-2)`);
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes('23514') &&
+        error.message.includes('Inventory source cannot be reversed by a generic command'),
+    );
+    assert.equal(await prisma.inventoryTransaction.count(), before.transactions);
+    assert.equal(await prisma.inventoryLedgerEntry.count(), before.entries);
+    assert.equal(await stock(item.defaultVariant.id), before.balance);
+    assert.deepEqual(
+      await prisma.goodsReceipt.findUniqueOrThrow({ where: { id: received.id } }),
+      before.receipt,
+    );
+    const sum = await prisma.inventoryLedgerEntry.aggregate({
+      where: { organizationId: org, locationId: location, variantId: item.defaultVariant.id },
+      _sum: { quantityDelta: true },
+    });
+    assert.equal(sum._sum.quantityDelta?.toFixed(6), before.balance);
+    await reject(
+      'POST',
+      `${base()}/inventory/transactions/${original.id}/reverse`,
+      {},
+      409,
+      'INVENTORY_REVERSAL_NOT_ALLOWED',
+    );
   });
 
   void test('purchase receipts recover negative stock and preserve ledger projection', async () => {

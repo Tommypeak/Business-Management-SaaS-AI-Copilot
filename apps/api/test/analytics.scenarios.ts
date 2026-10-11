@@ -474,6 +474,7 @@ export function registerAnalyticsTests(context: () => Context) {
     assert.deepEqual(flow.points[0], {
       bucket: '2026-02-02',
       customerPayments: '1000.0000',
+      customerRefunds: '0.0000',
       operatingExpenses: '200.0000',
       supplierPayments: '300.0000',
       netCashFlow: '500.0000',

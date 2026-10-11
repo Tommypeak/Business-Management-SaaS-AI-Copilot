@@ -18,6 +18,9 @@ export type LocationType = (typeof LOCATION_TYPES)[number];
 
 /** Public permission names only. Authorization is always evaluated by the API. */
 export const Permission = {
+  RETURNS_VIEW: 'returns.view',
+  RETURNS_MANAGE: 'returns.manage',
+  REFUNDS_MANAGE: 'refunds.manage',
   AI_USE: 'ai.use',
   AI_MANAGE: 'ai.manage',
   ANALYTICS_VIEW: 'analytics.view',
@@ -56,6 +59,7 @@ export const Permission = {
   INVENTORY_SETTINGS_MANAGE: 'inventory.settings.manage',
 } as const;
 export type PermissionCode = (typeof Permission)[keyof typeof Permission];
+export * from './returns.js';
 export * from './inventory.js';
 
 export interface UserResponse {

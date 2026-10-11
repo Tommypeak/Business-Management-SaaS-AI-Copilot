@@ -415,10 +415,21 @@ export function CompletionForm({
     </Command>
   );
 }
-export function PaymentForm({ org, order }: { org: string; order: SalesOrderResponse }) {
+export function PaymentForm({
+  org,
+  order,
+  outstanding,
+}: {
+  org: string;
+  order: SalesOrderResponse;
+  outstanding?: string | null;
+}) {
   return (
     <Command org={org} kind="payment" id={order.id} label="Add payment">
-      <PaymentFields key={order.paidAmount} amount={order.outstandingAmount} />
+      <PaymentFields
+        key={outstanding ?? order.paidAmount}
+        amount={outstanding ?? order.outstandingAmount}
+      />
     </Command>
   );
 }

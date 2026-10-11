@@ -11,6 +11,7 @@ import { SalesAnalyticsService } from './sales-analytics.service.js';
 import { InventoryAnalyticsService } from './inventory-analytics.service.js';
 import { PurchasingAnalyticsService } from './purchasing-analytics.service.js';
 import { FinanceAnalyticsService } from './finance-analytics.service.js';
+import { ReturnsAnalyticsService } from './returns-analytics.service.js';
 import { analyticsSchemas as schemas } from './analytics.schemas.js';
 @ApiTags('Analytics')
 @ApiBearerAuth()
@@ -25,12 +26,26 @@ export class AnalyticsController {
     private readonly inventory: InventoryAnalyticsService,
     private readonly purchasing: PurchasingAnalyticsService,
     private readonly finance: FinanceAnalyticsService,
+    private readonly returns: ReturnsAnalyticsService,
   ) {}
   @Get('overview')
   @ApiOperation({ summary: 'Executive operational counts. Requires analytics.view.' })
   @ApiOkResponse({ schema: schemas.overview })
   overview(@CurrentOrganization() t: OrganizationContext, @Query() q: AnalyticsQueryDto) {
     return this.analytics.overview(t.organizationId, q);
+  }
+  @Get('returns/summary')
+  @RequirePermissions(Permission.ANALYTICS_VIEW, Permission.RETURNS_VIEW)
+  @ApiOperation({
+    summary:
+      'Posted return events and refund cash by business date; money is masked without finance.view.',
+  })
+  returnsSummary(@CurrentOrganization() t: OrganizationContext, @Query() q: AnalyticsQueryDto) {
+    return this.returns.summary(
+      t.organizationId,
+      q,
+      t.permissions.includes(Permission.FINANCE_VIEW),
+    );
   }
   @Get('sales/summary')
   @RequirePermissions(Permission.ANALYTICS_VIEW, Permission.FINANCE_VIEW)

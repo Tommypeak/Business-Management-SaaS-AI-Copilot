@@ -28,6 +28,9 @@ export default async function FinancePage({
   const cards = [
     ['Completed Sales', summary.salesAmount],
     ['Customer Payments Collected', summary.paymentsCollected],
+    ['Posted Return Credits', summary.postedReturnCredits],
+    ['Customer Refund Payouts', summary.customerRefundsPaid],
+    ['Sales Less Period Return Credits', summary.adjustedSalesAmount],
     ['Operating Expenses', summary.expensesPaid],
     ['Supplier Payments', summary.supplierPaymentsPaid],
     ['Net Cash Flow', summary.netCashFlow],
@@ -76,10 +79,10 @@ export default async function FinancePage({
       <div className="panel space-y-2">
         <h3 className="font-semibold">How to read this</h3>
         <p>
-          Net Cash Flow is customer payments collected minus posted operating expenses and supplier
-          payments actually made. It is not accounting profit and does not include inventory
-          valuation, COGS, taxes or other accounting adjustments. Purchase orders, goods receipts
-          and unpaid bills do not change cash flow.
+          Net Cash Flow is customer payments collected minus customer refunds, posted operating
+          expenses and supplier payments actually made. It is not accounting profit and does not
+          include inventory valuation, COGS, taxes or other accounting adjustments. Purchase orders,
+          goods receipts and unpaid bills do not change cash flow.
         </p>
         {!summary.supplierPaymentsLocationScoped && (
           <p>

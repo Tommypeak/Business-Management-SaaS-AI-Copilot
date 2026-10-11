@@ -18,6 +18,7 @@ export default async function TransactionPage({
   const reverse =
     row.type !== 'REVERSAL' &&
     row.type !== 'SALE' &&
+    row.type !== 'SALE_RETURN' &&
     row.type !== 'PURCHASE_RECEIPT' &&
     !row.reversedByTransactionId &&
     organization.currentMembership.permissions.includes(permission);
@@ -29,6 +30,15 @@ export default async function TransactionPage({
         <p className="break-all text-sm text-slate-500">{row.id}</p>
       </header>
       <section className="panel space-y-3">
+        {row.salesReturnId &&
+          organization.currentMembership.permissions.includes(Permission.RETURNS_VIEW) && (
+            <p>
+              Customer return:{' '}
+              <Link className="underline" href={`/app/${org}/returns/${row.salesReturnId}`}>
+                {row.salesReturnId}
+              </Link>
+            </p>
+          )}
         <p>{row.createdAt.replace('T', ' ').replace('Z', ' UTC')}</p>
         <p className="break-all">Created by: {row.createdBy.id}</p>
         {row.salesOrderId &&

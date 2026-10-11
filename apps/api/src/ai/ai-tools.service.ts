@@ -4,6 +4,7 @@ import { validate, isUUID } from 'class-validator';
 import { Permission, type AiSource } from '@saas/types';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AnalyticsService } from '../analytics/analytics.service.js';
+import { ReturnsAnalyticsService } from '../analytics/returns-analytics.service.js';
 import { AnalyticsQueryDto } from '../analytics/analytics.dto.js';
 import { analyticsContext } from '../analytics/analytics-query.js';
 import { SalesAnalyticsService } from '../analytics/sales-analytics.service.js';
@@ -23,6 +24,7 @@ type InventorySummary = Awaited<ReturnType<InventoryAnalyticsService['summary']>
 type PurchasingSummary = Awaited<ReturnType<PurchasingAnalyticsService['summary']>>;
 type FinanceSummary = Awaited<ReturnType<FinanceService['summary']>>;
 export type AiToolData =
+  | Awaited<ReturnType<ReturnsAnalyticsService['summary']>>
   | (Awaited<ReturnType<AnalyticsService['overview']>> & {
       finance: FinanceSummary | { status: 'FORBIDDEN' };
     })
@@ -80,6 +82,7 @@ export class AiToolsService {
     private readonly cash: FinanceAnalyticsService,
     private readonly ap: AccountsPayableQueryService,
     private readonly stock: InventoryStockService,
+    private readonly returns: ReturnsAnalyticsService,
   ) {}
   async execute(org: string, user: string, name: string, json: string, requestId: string) {
     const start = Date.now();
@@ -131,6 +134,13 @@ export class AiToolsService {
     Object.assign(query, { from: c.from, to: c.to });
     let data: AiToolData;
     switch (name) {
+      case 'get_customer_returns_summary':
+        data = await this.returns.summary(
+          org,
+          query,
+          permissions.includes(Permission.FINANCE_VIEW),
+        );
+        break;
       case 'get_business_overview':
         data = {
           ...(await this.analytics.overview(org, query)),

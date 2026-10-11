@@ -47,6 +47,9 @@ export interface FinanceSummaryResponse {
   to: string | null;
   salesAmount: string;
   paymentsCollected: string;
+  postedReturnCredits: string;
+  customerRefundsPaid: string;
+  adjustedSalesAmount: string;
   expensesPaid: string;
   supplierPaymentsPaid: string | null;
   supplierPaymentsLocationScoped: boolean;

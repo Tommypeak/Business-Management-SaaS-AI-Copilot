@@ -122,11 +122,7 @@ export class InventoryCommandsService {
     const permission =
       original.type === 'TRANSFER' ? Permission.INVENTORY_TRANSFER : Permission.INVENTORY_ADJUST;
     if (!context.permissions.includes(permission)) throw new ForbiddenException();
-    if (
-      original.type === 'REVERSAL' ||
-      original.type === 'SALE' ||
-      original.type === 'PURCHASE_RECEIPT'
-    )
+    if (!['OPENING_BALANCE', 'ADJUSTMENT', 'TRANSFER'].includes(original.type))
       inventoryConflict('INVENTORY_REVERSAL_NOT_ALLOWED');
     return this.execute(
       org,
@@ -213,6 +209,7 @@ export class InventoryCommandsService {
     reversesTransactionId?: string,
     salesOrderId?: string,
     goodsReceiptId?: string,
+    salesReturnId?: string,
   ) {
     const settings = await tx.inventorySettings.findUniqueOrThrow({
       where: { organizationId: org },
@@ -234,7 +231,11 @@ export class InventoryCommandsService {
       });
       const next = (balance?.quantity ?? new Prisma.Decimal(0)).plus(entry.delta);
       if (next.abs().gt(maximum)) inventoryConflict('INVENTORY_QUANTITY_OVERFLOW');
-      if (type !== 'PURCHASE_RECEIPT' && !settings.allowNegativeStock && next.lt(0))
+      if (
+        !['PURCHASE_RECEIPT', 'SALE_RETURN'].includes(type) &&
+        !settings.allowNegativeStock &&
+        next.lt(0)
+      )
         inventoryConflict('INSUFFICIENT_STOCK');
       balances.push({ ...entry, quantity: next });
     }
@@ -250,6 +251,7 @@ export class InventoryCommandsService {
         reversesTransactionId,
         salesOrderId,
         goodsReceiptId,
+        salesReturnId,
       },
     });
     for (const entry of balances) {
@@ -333,7 +335,41 @@ export class InventoryCommandsService {
     if (variants.some((variant) => variant.item.type !== 'PRODUCT' || !variant.item.trackInventory))
       inventoryConflict('INVENTORY_TRACKING_DISABLED');
   }
-  async lockResources(tx: InventoryTx, org: string, ids: string[], locationsToLock: string[]) {
+  async recordSaleReturn(
+    tx: InventoryTx,
+    org: string,
+    actor: string,
+    salesReturnId: string,
+    entries: Entry[],
+  ) {
+    if (!entries.length) return;
+    for (const key of [
+      ...new Set(entries.map((e) => stockKey(org, e.locationId, e.variantId))),
+    ].sort())
+      await inventoryLock(tx, key);
+    return this.record(
+      tx,
+      org,
+      actor,
+      randomUUID(),
+      'SALE_RETURN',
+      null,
+      null,
+      hash(['SALE_RETURN', salesReturnId]),
+      entries,
+      undefined,
+      undefined,
+      undefined,
+      salesReturnId,
+    );
+  }
+  async lockResources(
+    tx: InventoryTx,
+    org: string,
+    ids: string[],
+    locationsToLock: string[],
+    historicalReturn = false,
+  ) {
     const variantIds = [...new Set(ids)];
     const locationIds = [...new Set(locationsToLock)];
     const initial = await tx.catalogVariant.findMany({
@@ -357,7 +393,8 @@ export class InventoryCommandsService {
     if (variants.length !== variantIds.length || locations.length !== locationIds.length)
       throw new NotFoundException();
     if (
-      variants.some((variant) => !variant.isActive || !variant.item.isActive) ||
+      (!historicalReturn &&
+        variants.some((variant) => !variant.isActive || !variant.item.isActive)) ||
       locations.some((location) => !location.isActive)
     )
       inventoryConflict('INVENTORY_RESOURCE_INACTIVE');

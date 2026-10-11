@@ -29,6 +29,7 @@ export const SYSTEM_ROLES = [
       Permission.CUSTOMERS_VIEW,
       Permission.SUPPLIERS_VIEW,
       Permission.PURCHASING_VIEW,
+      Permission.RETURNS_VIEW,
     ],
   },
 ] as const;

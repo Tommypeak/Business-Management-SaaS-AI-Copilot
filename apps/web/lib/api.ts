@@ -46,6 +46,17 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (!response.ok) {
     const knownConflicts: Record<string, string> = {
+      RETURN_REQUIRES_COMPLETED_SALE: 'Returns require a completed sale.',
+      RETURN_QUANTITY_EXCEEDED:
+        'Another return used these quantities. Refresh and review the remaining quantities.',
+      RETURN_NOT_DRAFT: 'Only a draft return can be changed or posted.',
+      RETURN_CHANGED: 'This draft changed. Refresh and review it before posting.',
+      RETURN_QUOTE_CHANGED:
+        'The current return credit changed. Refresh and confirm the updated credit.',
+      RESTOCK_NOT_ALLOWED: 'Only a historic product can be restocked.',
+      RETURN_UNIT_CHANGED: 'The unit no longer matches the original sale.',
+      REFUND_EXCEEDS_COLLECTED_AMOUNT: 'The payout exceeds the remaining collected cash.',
+      REFUND_EXCEEDS_RETURN_CREDIT: 'The allocation exceeds this return’s unused credit.',
       ORDER_NOT_DRAFT: 'Only draft sales can be edited, completed or cancelled. Refresh the order.',
       ORDER_NOT_COMPLETED: 'Complete the sale before recording a payment.',
       ORDER_UNIT_CHANGED: 'A catalog unit changed. Save the draft items again before completion.',

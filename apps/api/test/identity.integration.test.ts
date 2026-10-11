@@ -33,6 +33,7 @@ import { startAiStub, stopAiStub } from './ai-provider.stub.js';
 import { registerPurchasingTests } from './purchasing.scenarios.js';
 import { registerExpensesFinanceTests } from './expenses-finance.scenarios.js';
 import { registerAccountsPayableTests } from './accounts-payable.scenarios.js';
+import { registerReturnsTests } from './returns.scenarios.js';
 
 const envPath = resolve('../../.env');
 if (existsSync(envPath)) process.loadEnvFile(envPath);
@@ -590,3 +591,4 @@ registerExpensesFinanceTests(() => ({ app, prisma, admin, schema, token, legacyO
 registerAccountsPayableTests(() => ({ app, prisma, admin, schema, token, legacyOrganizationId }));
 registerAnalyticsTests(() => ({ app, prisma, token, legacyOrganizationId }));
 registerAiTests(() => ({ app, prisma, token, legacyOrganizationId }));
+registerReturnsTests(() => ({ app, prisma, token, legacyOrganizationId }));

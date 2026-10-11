@@ -8,6 +8,7 @@ import { SalesAnalyticsService } from './sales-analytics.service.js';
 import { InventoryAnalyticsService } from './inventory-analytics.service.js';
 import { PurchasingAnalyticsService } from './purchasing-analytics.service.js';
 import { FinanceAnalyticsService } from './finance-analytics.service.js';
+import { ReturnsAnalyticsService } from './returns-analytics.service.js';
 @Module({
   imports: [PrismaModule, AuthorizationModule, FinanceModule],
   controllers: [AnalyticsController],
@@ -17,6 +18,7 @@ import { FinanceAnalyticsService } from './finance-analytics.service.js';
     InventoryAnalyticsService,
     PurchasingAnalyticsService,
     FinanceAnalyticsService,
+    ReturnsAnalyticsService,
   ],
   providers: [
     AnalyticsService,
@@ -24,6 +26,7 @@ import { FinanceAnalyticsService } from './finance-analytics.service.js';
     InventoryAnalyticsService,
     PurchasingAnalyticsService,
     FinanceAnalyticsService,
+    ReturnsAnalyticsService,
   ],
 })
 export class AnalyticsModule {}

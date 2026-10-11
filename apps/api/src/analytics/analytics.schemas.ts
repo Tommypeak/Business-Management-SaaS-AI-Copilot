@@ -156,6 +156,9 @@ export const analyticsSchemas = {
       to: text,
       salesAmount: money,
       paymentsCollected: money,
+      postedReturnCredits: money,
+      customerRefundsPaid: money,
+      adjustedSalesAmount: money,
       expensesPaid: money,
       supplierPaymentsPaid: { ...money, nullable: true },
       netCashFlow: money,
@@ -182,6 +185,7 @@ export const analyticsSchemas = {
       object({
         bucket: text,
         customerPayments: money,
+        customerRefunds: money,
         operatingExpenses: money,
         supplierPayments: { ...money, nullable: true },
         netCashFlow: money,

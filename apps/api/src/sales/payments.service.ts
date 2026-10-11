@@ -44,10 +44,19 @@ export class PaymentsService {
       _count: true,
     });
     if (paid._count >= 1000) inventoryConflict('PAYMENT_LIMIT_REACHED');
+    const credits = await tx.salesReturn.aggregate({
+      where: { organizationId: org, salesOrderId: orderId, status: 'POSTED' },
+      _sum: { totalRefundableAmount: true },
+    });
+    const refunds = await tx.customerRefund.aggregate({
+      where: { organizationId: org, salesOrderId: orderId },
+      _sum: { amount: true },
+    });
     if (
       decimal(paid._sum.amount ?? 0)
         .plus(input.amount)
-        .gt(order.total)
+        .minus(refunds._sum.amount ?? 0)
+        .gt(decimal(order.total).minus(credits._sum.totalRefundableAmount ?? 0))
     )
       inventoryConflict('PAYMENT_EXCEEDS_OUTSTANDING');
     return tx.salesPayment.create({

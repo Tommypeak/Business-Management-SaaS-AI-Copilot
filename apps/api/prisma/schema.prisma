@@ -111,37 +111,41 @@ model User {
 }
 
 model Organization {
-  id                    String                   @id @default(uuid()) @db.Uuid
-  name                  String                   @db.VarChar(120)
-  businessType          BusinessType
-  defaultCurrency       String                   @db.Char(3)
-  timezone              String                   @db.VarChar(100)
-  locale                String                   @default("en") @db.VarChar(35)
-  createdAt             DateTime                 @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime                 @updatedAt @db.Timestamptz(3)
-  memberships           OrganizationMembership[]
-  roles                 Role[]
-  locations             Location[]
-  catalogItems          CatalogItem[]
-  catalogCategories     CatalogCategory[]
-  customFields          CustomFieldDefinition[]
-  inventorySettings     InventorySettings?
-  customers             Customer[]
-  salesOrders           SalesOrder[]
-  salesSequence         SalesSequence?
-  inventoryTransactions InventoryTransaction[]
-  suppliers             Supplier[]
-  purchaseOrders        PurchaseOrder[]
-  purchaseSequence      PurchaseSequence?
-  goodsReceiptSequence  GoodsReceiptSequence?
-  goodsReceipts         GoodsReceipt[]
-  expenseCategories     ExpenseCategory[]
-  expenses              Expense[]
-  expenseSequence       ExpenseSequence?
-  supplierBills         SupplierBill[]
-  supplierBillSequence  SupplierBillSequence?
-  aiSettings            AiSettings?
-  aiConversations       AiConversation[]
+  id                     String                   @id @default(uuid()) @db.Uuid
+  name                   String                   @db.VarChar(120)
+  businessType           BusinessType
+  defaultCurrency        String                   @db.Char(3)
+  timezone               String                   @db.VarChar(100)
+  locale                 String                   @default("en") @db.VarChar(35)
+  createdAt              DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                 @updatedAt @db.Timestamptz(3)
+  memberships            OrganizationMembership[]
+  roles                  Role[]
+  locations              Location[]
+  catalogItems           CatalogItem[]
+  catalogCategories      CatalogCategory[]
+  customFields           CustomFieldDefinition[]
+  inventorySettings      InventorySettings?
+  customers              Customer[]
+  salesOrders            SalesOrder[]
+  salesSequence          SalesSequence?
+  inventoryTransactions  InventoryTransaction[]
+  suppliers              Supplier[]
+  purchaseOrders         PurchaseOrder[]
+  purchaseSequence       PurchaseSequence?
+  goodsReceiptSequence   GoodsReceiptSequence?
+  goodsReceipts          GoodsReceipt[]
+  expenseCategories      ExpenseCategory[]
+  expenses               Expense[]
+  expenseSequence        ExpenseSequence?
+  supplierBills          SupplierBill[]
+  supplierBillSequence   SupplierBillSequence?
+  aiSettings             AiSettings?
+  aiConversations        AiConversation[]
+  salesReturns           SalesReturn[]
+  salesReturnSequence    SalesReturnSequence?
+  customerRefunds        CustomerRefund[]
+  customerRefundSequence CustomerRefundSequence?
 }
 
 model OrganizationMembership {
@@ -159,6 +163,10 @@ model OrganizationMembership {
   createdSupplierBills    SupplierBill[]    @relation("SupplierBillCreatedByMembership")
   voidedSupplierBills     SupplierBill[]    @relation("SupplierBillVoidedByMembership")
   createdSupplierPayments SupplierPayment[] @relation("SupplierPaymentCreatedByMembership")
+  createdSalesReturns     SalesReturn[]     @relation("SalesReturnCreatedByMembership")
+  postedSalesReturns      SalesReturn[]     @relation("SalesReturnPostedByMembership")
+  cancelledSalesReturns   SalesReturn[]     @relation("SalesReturnCancelledByMembership")
+  createdCustomerRefunds  CustomerRefund[]  @relation("CustomerRefundCreatedByMembership")
 
   @@unique([organizationId, userId])
   @@unique([id, organizationId])
@@ -204,6 +212,7 @@ model MembershipRole {
 }
 
 model Location {
+  returnItems       SalesReturnItem[]
   salesOrders       SalesOrder[]
   purchaseOrders    PurchaseOrder[]
   id                String                 @id @default(uuid()) @db.Uuid
@@ -415,6 +424,7 @@ model CatalogItemCustomFieldValue {
 enum InventoryTransactionType {
   SALE
   PURCHASE_RECEIPT
+  SALE_RETURN
   OPENING_BALANCE
   ADJUSTMENT
   TRANSFER
@@ -438,6 +448,8 @@ model InventorySettings {
 }
 
 model InventoryTransaction {
+  salesReturnId         String?                    @unique @db.Uuid
+  salesReturn           SalesReturn?               @relation(fields: [salesReturnId, organizationId], references: [id, organizationId], onDelete: Restrict)
   salesOrderId          String?                    @unique @db.Uuid
   salesOrder            SalesOrder?                @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
   goodsReceiptId        String?                    @unique @db.Uuid
@@ -460,6 +472,7 @@ model InventoryTransaction {
 
   @@unique([salesOrderId, organizationId])
   @@unique([goodsReceiptId, organizationId])
+  @@unique([salesReturnId, organizationId])
   @@unique([id, organizationId])
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, createdAt, id])
@@ -542,6 +555,8 @@ model SalesSequence {
 }
 
 model SalesOrder {
+  returns                  SalesReturn[]
+  refunds                  CustomerRefund[]
   id                       String                @id @default(uuid()) @db.Uuid
   organizationId           String                @db.Uuid
   sequenceNumber           Int
@@ -583,25 +598,27 @@ model SalesOrder {
 }
 
 model SalesOrderItem {
+  returnItems         SalesReturnItem[]
   snapshotItemType    CatalogItemType?
-  stockDeducted       Boolean          @default(false)
-  id                  String           @id @default(uuid()) @db.Uuid
-  organizationId      String           @db.Uuid
-  salesOrderId        String           @db.Uuid
-  variantId           String           @db.Uuid
-  quantity            Decimal          @db.Decimal(19, 6)
-  unitPrice           Decimal          @db.Decimal(19, 4)
-  discountAmount      Decimal          @db.Decimal(19, 4)
-  lineTotal           Decimal          @db.Decimal(19, 4)
-  snapshotItemName    String           @db.VarChar(200)
-  snapshotVariantName String?          @db.VarChar(120)
-  snapshotSku         String?          @db.VarChar(80)
+  stockDeducted       Boolean           @default(false)
+  id                  String            @id @default(uuid()) @db.Uuid
+  organizationId      String            @db.Uuid
+  salesOrderId        String            @db.Uuid
+  variantId           String            @db.Uuid
+  quantity            Decimal           @db.Decimal(19, 6)
+  unitPrice           Decimal           @db.Decimal(19, 4)
+  discountAmount      Decimal           @db.Decimal(19, 4)
+  lineTotal           Decimal           @db.Decimal(19, 4)
+  snapshotItemName    String            @db.VarChar(200)
+  snapshotVariantName String?           @db.VarChar(120)
+  snapshotSku         String?           @db.VarChar(80)
   snapshotUnit        UnitOfMeasure
-  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
-  order               SalesOrder       @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
-  variant             CatalogVariant   @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  order               SalesOrder        @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  variant             CatalogVariant    @relation(fields: [variantId, organizationId], references: [id, organizationId], onDelete: Restrict)
 
   @@unique([salesOrderId, variantId])
+  @@unique([id, organizationId, salesOrderId])
   @@index([organizationId, salesOrderId])
   @@index([organizationId, variantId])
 }
@@ -624,6 +641,145 @@ model SalesPayment {
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, salesOrderId, createdAt, id])
   @@index([organizationId, createdAt])
+}
+
+enum SalesReturnStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum RestockDisposition {
+  RESTOCK
+  NO_RESTOCK
+}
+
+model SalesReturnSequence {
+  organizationId String       @id @db.Uuid
+  lastNumber     Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model CustomerRefundSequence {
+  organizationId String       @id @db.Uuid
+  lastNumber     Int          @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model SalesReturn {
+  id                         String                  @id @default(uuid()) @db.Uuid
+  organizationId             String                  @db.Uuid
+  salesOrderId               String                  @db.Uuid
+  sequenceNumber             Int
+  status                     SalesReturnStatus       @default(DRAFT)
+  reason                     String?                 @db.VarChar(1000)
+  note                       String?                 @db.VarChar(2000)
+  currencyCode               String                  @db.Char(3)
+  totalRefundableAmount      Decimal                 @default(0) @db.Decimal(19, 4)
+  revision                   Int                     @default(0)
+  createdByUserId            String                  @db.Uuid
+  postedByUserId             String?                 @db.Uuid
+  cancelledByUserId          String?                 @db.Uuid
+  cancelReason               String?                 @db.VarChar(1000)
+  createdAt                  DateTime                @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime                @updatedAt @db.Timestamptz(3)
+  postedAt                   DateTime?               @db.Timestamptz(3)
+  cancelledAt                DateTime?               @db.Timestamptz(3)
+  creationIdempotencyKey     String                  @db.Uuid
+  creationRequestHash        String                  @db.Char(64)
+  postingIdempotencyKey      String?                 @db.Uuid
+  postingRequestHash         String?                 @db.Char(64)
+  cancellationIdempotencyKey String?                 @db.Uuid
+  cancellationRequestHash    String?                 @db.Char(64)
+  organization               Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  order                      SalesOrder              @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdBy                  OrganizationMembership  @relation("SalesReturnCreatedByMembership", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  postedBy                   OrganizationMembership? @relation("SalesReturnPostedByMembership", fields: [organizationId, postedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  cancelledBy                OrganizationMembership? @relation("SalesReturnCancelledByMembership", fields: [organizationId, cancelledByUserId], references: [organizationId, userId], onDelete: Restrict)
+  items                      SalesReturnItem[]
+  allocations                RefundAllocation[]
+  inventoryTransaction       InventoryTransaction?
+
+  @@unique([id, organizationId])
+  @@unique([id, organizationId, salesOrderId])
+  @@unique([organizationId, sequenceNumber])
+  @@unique([organizationId, creationIdempotencyKey])
+  @@unique([organizationId, postingIdempotencyKey])
+  @@unique([organizationId, cancellationIdempotencyKey])
+  @@index([organizationId, salesOrderId, status])
+  @@index([organizationId, status, createdAt, id])
+  @@index([organizationId, createdAt, id])
+  @@index([organizationId, postedAt])
+}
+
+model SalesReturnItem {
+  id                  String             @id @default(uuid()) @db.Uuid
+  organizationId      String             @db.Uuid
+  salesOrderId        String             @db.Uuid
+  salesReturnId       String             @db.Uuid
+  salesOrderItemId    String             @db.Uuid
+  quantity            Decimal            @db.Decimal(19, 6)
+  restockDisposition  RestockDisposition
+  locationId          String?            @db.Uuid
+  refundAmount        Decimal            @db.Decimal(19, 4)
+  stockRestocked      Boolean            @default(false)
+  snapshotItemName    String             @db.VarChar(200)
+  snapshotVariantName String?            @db.VarChar(120)
+  snapshotSku         String?            @db.VarChar(80)
+  snapshotUnit        UnitOfMeasure
+  snapshotItemType    CatalogItemType?
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  salesReturn         SalesReturn        @relation(fields: [salesReturnId, organizationId, salesOrderId], references: [id, organizationId, salesOrderId], onDelete: Restrict)
+  sourceItem          SalesOrderItem     @relation(fields: [salesOrderItemId, organizationId, salesOrderId], references: [id, organizationId, salesOrderId], onDelete: Restrict)
+  location            Location?          @relation(fields: [locationId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([salesReturnId, salesOrderItemId])
+  @@index([organizationId, salesOrderItemId])
+  @@index([organizationId, salesReturnId])
+}
+
+model CustomerRefund {
+  id              String                 @id @default(uuid()) @db.Uuid
+  organizationId  String                 @db.Uuid
+  salesOrderId    String                 @db.Uuid
+  sequenceNumber  Int
+  amount          Decimal                @db.Decimal(19, 4)
+  currencyCode    String                 @db.Char(3)
+  paymentMethod   PaymentMethod
+  paymentDate     DateTime               @db.Date
+  reference       String?                @db.VarChar(200)
+  note            String?                @db.VarChar(2000)
+  createdByUserId String                 @db.Uuid
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  idempotencyKey  String                 @db.Uuid
+  requestHash     String                 @db.Char(64)
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  order           SalesOrder             @relation(fields: [salesOrderId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  createdBy       OrganizationMembership @relation("CustomerRefundCreatedByMembership", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  allocations     RefundAllocation[]
+
+  @@unique([id, organizationId, salesOrderId])
+  @@unique([organizationId, sequenceNumber])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, salesOrderId, createdAt, id])
+  @@index([organizationId, paymentDate])
+  @@index([organizationId, createdAt, id])
+}
+
+model RefundAllocation {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @db.Uuid
+  salesOrderId     String         @db.Uuid
+  customerRefundId String         @db.Uuid
+  salesReturnId    String         @db.Uuid
+  allocatedAmount  Decimal        @db.Decimal(19, 4)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  refund           CustomerRefund @relation(fields: [customerRefundId, organizationId, salesOrderId], references: [id, organizationId, salesOrderId], onDelete: Restrict)
+  salesReturn      SalesReturn    @relation(fields: [salesReturnId, organizationId, salesOrderId], references: [id, organizationId, salesOrderId], onDelete: Restrict)
+
+  @@unique([customerRefundId, salesReturnId])
+  @@index([organizationId, salesReturnId])
+  @@index([organizationId, customerRefundId])
 }
 
 enum PurchaseOrderStatus {

@@ -118,6 +118,7 @@ export interface CashFlowTrendPoint {
   operatingExpenses: string;
   supplierPayments: string | null;
   netCashFlow: string;
+  customerRefunds: string;
 }
 export interface CashFlowTrendResponse {
   context: AnalyticsContext;

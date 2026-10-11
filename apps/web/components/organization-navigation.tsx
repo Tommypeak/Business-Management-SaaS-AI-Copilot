@@ -23,6 +23,8 @@ export function OrganizationNavigation({
         ['AI Copilot', 'ai', Permission.AI_USE, '✳'],
         ['Dashboard', 'dashboard', Permission.ANALYTICS_VIEW, '◫'],
         ['Sales', 'sales', Permission.SALES_VIEW, '↗'],
+        ['Returns', 'returns', Permission.RETURNS_VIEW, '↶'],
+        ['Customer refunds', 'refunds', Permission.RETURNS_VIEW, '↙'],
         ['Customers', 'customers', Permission.CUSTOMERS_VIEW, '◉'],
         ['Catalog', 'catalog', Permission.CATALOG_VIEW, '▦'],
         ['Inventory', 'inventory', Permission.INVENTORY_VIEW, '▤'],
